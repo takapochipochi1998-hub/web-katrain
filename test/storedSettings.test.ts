@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeStoredSettings } from '../src/store/gameStore';
+import { KATAGO_HUMAN_MODEL_URL } from '../src/engine/katago/modelDefaults';
 
 /**
  * localStorage is input the app did not write: editable by hand, kept across
@@ -69,6 +70,13 @@ describe('normalizeStoredSettings', () => {
   it('forgets an uploaded model whose blob URL died with the page', () => {
     expect('humanSlModelUrl' in normalizeStoredSettings({ humanSlModelUrl: 'blob:http://x/y' })!).toBe(false);
     expect('katagoModelUrl' in normalizeStoredSettings({ katagoModelUrl: 42 })!).toBe(false);
+  });
+
+  it('moves the old human-net download URL to the self-hosted copy', () => {
+    const settings = normalizeStoredSettings({ humanSlModelUrl: KATAGO_HUMAN_MODEL_URL });
+    expect(settings?.humanSlModelUrl).toMatch(/\/models\/b18c384nbt-humanv0\.bin\.gz$/);
+    expect(normalizeStoredSettings({ humanSlModelUrl: 'https://example.com/h.bin.gz' })?.humanSlModelUrl)
+      .toBe('https://example.com/h.bin.gz');
   });
 
   it('survives the shapes a corrupt entry actually takes', () => {

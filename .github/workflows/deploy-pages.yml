@@ -49,6 +49,11 @@ jobs:
       - name: Type-check tests
         run: npm run test:typecheck
 
+      # KataGo's release download sends no CORS headers, so the human SL net
+      # is served from this site. Too large to keep in git (~99 MB).
+      - name: Fetch human SL model
+        run: curl -fsSL -o public/models/b18c384nbt-humanv0.bin.gz https://github.com/lightvector/KataGo/releases/download/v1.15.0/b18c384nbt-humanv0.bin.gz
+
       - name: Build
         run: npm run build
 

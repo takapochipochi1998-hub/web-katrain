@@ -9,7 +9,7 @@ import type { KataGoAnalysisPayload } from '../engine/katago/types';
 import { ENGINE_MAX_TIME_MS, ENGINE_MAX_VISITS } from '../engine/katago/limits';
 import { clampAnalysisVisits } from '../utils/visitPresets';
 import { DEFAULT_EVAL_THRESHOLDS } from '../utils/nodeAnalysis';
-import { KATAGO_HUMAN_MODEL_URL, KATAGO_RECOMMENDED_MODEL_URL, KATAGO_SMALL_MODEL_PATH } from '../engine/katago/modelDefaults';
+import { KATAGO_HUMAN_MODEL_PATH, KATAGO_HUMAN_MODEL_URL, KATAGO_RECOMMENDED_MODEL_URL, KATAGO_SMALL_MODEL_PATH } from '../engine/katago/modelDefaults';
 import { KATAGO_HUMAN_PROFILE_DEFAULT } from '../engine/katago/searchParams';
 import { decodeKaTrainKt, kaTrainAnalysisToAnalysisResult } from '../utils/katrainSgfAnalysis';
 import { decodeKayaKa } from '../utils/kayaSgfAnalysis';
@@ -397,6 +397,9 @@ export function normalizeStoredSettings(
       const stored = (parsed as { humanSlModelUrl?: unknown }).humanSlModelUrl;
       if (typeof stored !== 'string' || /^blob:/i.test(stored.trim())) {
         delete (parsed as { humanSlModelUrl?: unknown }).humanSlModelUrl;
+      } else if (stored.trim() === KATAGO_HUMAN_MODEL_URL) {
+        // The old default: unfetchable from a browser, so move it to the self-hosted copy.
+        (parsed as { humanSlModelUrl: string }).humanSlModelUrl = publicUrl(KATAGO_HUMAN_MODEL_PATH);
       }
     }
     if ('katagoModelUrl' in parsed) {
@@ -1413,7 +1416,7 @@ const defaultSettings: GameSettings = {
   katagoNnRandomize: true,
   katagoConservativePass: true,
   humanSlEnabled: false,
-  humanSlModelUrl: KATAGO_HUMAN_MODEL_URL,
+  humanSlModelUrl: publicUrl(KATAGO_HUMAN_MODEL_PATH),
   humanSlProfile: KATAGO_HUMAN_PROFILE_DEFAULT,
   humanSlBotStyle: 'imitate',
   analysisPolicySource: 'engine',

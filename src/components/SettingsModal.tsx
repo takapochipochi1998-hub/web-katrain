@@ -7,7 +7,7 @@ import type { GameSettings } from '../types';
 import { ENGINE_MAX_TIME_MS, ENGINE_MAX_VISITS } from '../engine/katago/limits';
 import {
     KATAGO_HUMAN_MODEL_SIZE,
-    KATAGO_HUMAN_MODEL_URL,
+    KATAGO_HUMAN_MODEL_PATH,
     KATAGO_RECOMMENDED_MODEL_NAME,
     KATAGO_RECOMMENDED_MODEL_SIZE,
     KATAGO_RECOMMENDED_MODEL_UPLOADED,
@@ -538,7 +538,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, focusMode
         humanBlobUrlRef.current = null;
         setHumanModelFileName(null);
         setHumanModelError(null);
-        updateSettings({ humanSlModelUrl: KATAGO_HUMAN_MODEL_URL });
+        updateSettings({ humanSlModelUrl: publicUrl(KATAGO_HUMAN_MODEL_PATH) });
     };
 
     const handleClearUpload = () => {
@@ -2270,7 +2270,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, focusMode
                                                         value={humanBlobUrlRef.current && settings.humanSlModelUrl === humanBlobUrlRef.current ? '' : settings.humanSlModelUrl}
                                                         onChange={(e) => updateSettings({ humanSlModelUrl: e.target.value })}
                                                         className={`${inputClass} text-xs`}
-                                                        placeholder={KATAGO_HUMAN_MODEL_URL}
+                                                        placeholder={publicUrl(KATAGO_HUMAN_MODEL_PATH)}
                                                     />
                                                     <p className={subtextClass}>
                                                         The official download does not allow cross-origin fetches, so either host the

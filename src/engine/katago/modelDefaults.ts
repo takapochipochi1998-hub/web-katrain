@@ -24,3 +24,6 @@ export const KATAGO_HUMAN_MODEL_NAME = 'b18c384nbt-humanv0';
 export const KATAGO_HUMAN_MODEL_URL =
   'https://github.com/lightvector/KataGo/releases/download/v1.15.0/b18c384nbt-humanv0.bin.gz';
 export const KATAGO_HUMAN_MODEL_SIZE = '~99 MB';
+// The official download sends no CORS headers, so the deploy fetches it into
+// public/models/ and the app loads it from its own origin.
+export const KATAGO_HUMAN_MODEL_PATH = 'models/b18c384nbt-humanv0.bin.gz';
