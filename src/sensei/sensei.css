@@ -108,3 +108,14 @@
   padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: 700;
   background: #0f4c81; color: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
 }
+
+/* Review */
+.sensei-nav-buttons { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
+.sensei-nav-buttons button { background: #2d3446; color: #fff; border-radius: 4px; padding: 8px 2px; font-size: 13px; font-weight: 700; }
+.sensei-nav-buttons button:disabled { opacity: 0.4; }
+.sensei-trial { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: #fff3c4; padding: 8px; border-radius: 4px; font-weight: 700; }
+.sensei-verdict { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 32px; }
+.sensei-badge { color: #fff; border-radius: 999px; padding: 2px 10px; font-size: 13px; font-weight: 700; }
+.sensei-candidates { display: flex; flex-wrap: wrap; gap: 4px; }
+.sensei-candidates button { background: #fff; border: 1px solid #aaa; border-radius: 4px; padding: 2px 6px; font-size: 13px; }
+.sensei-graph { width: 100%; height: auto; display: block; border-radius: 4px; touch-action: manipulation; }

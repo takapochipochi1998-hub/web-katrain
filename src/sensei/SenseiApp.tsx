@@ -4,11 +4,12 @@ import { useGameStore } from '../store/gameStore';
 import { publicUrl } from '../utils/publicUrl';
 import { GameScreen } from './GameScreen';
 import { PlayScreen } from './PlayScreen';
+import { ReviewScreen } from './ReviewScreen';
 import { loadRankBook, saveRankBook, type RankBook } from './rankLadder';
 import { loadSession, startGame, type GameConfig, type SessionMeta } from './session';
 import { setUiMode } from './uiMode';
 
-type Screen = 'play' | 'game';
+type Screen = 'play' | 'game' | 'review';
 
 /** The AI Sensei-style shell: play against the bot, then review. */
 export const SenseiApp: React.FC = () => {
@@ -49,7 +50,10 @@ export const SenseiApp: React.FC = () => {
         <span className="sensei-logo">碁トレ</span>
         <button type="button" className={screen === 'play' ? 'is-active' : ''} onClick={() => setScreen('play')}>AIと対局</button>
         {meta && (
-          <button type="button" className={screen === 'game' ? 'is-active' : ''} onClick={() => setScreen('game')}>対局中の盤</button>
+          <button type="button" className={screen === 'game' ? 'is-active' : ''} onClick={() => setScreen('game')}>対局</button>
+        )}
+        {meta && (
+          <button type="button" className={screen === 'review' ? 'is-active' : ''} onClick={() => setScreen('review')}>検討</button>
         )}
         <button type="button" className="sensei-nav-detail" onClick={() => setUiMode('classic')}>詳細モード</button>
       </nav>
@@ -63,10 +67,10 @@ export const SenseiApp: React.FC = () => {
             onRanksChange={updateRanks}
             onMetaChange={setMeta}
             onReplay={replay}
-            // The review screen is the next step; until then the detail mode reviews.
-            onReview={() => setUiMode('classic')}
+            onReview={() => setScreen('review')}
           />
         )}
+        {screen === 'review' && <ReviewScreen key={meta?.startedAt ?? 0} onPlayAgain={() => setScreen('play')} />}
       </main>
     </div>
   );
