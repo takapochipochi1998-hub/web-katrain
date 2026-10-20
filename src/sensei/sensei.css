@@ -99,7 +99,7 @@
 .sensei-muted { color: var(--s-muted); font-size: 13px; }
 .sensei-big { font-size: 34px; font-weight: 800; letter-spacing: -0.02em; line-height: 1; }
 
-.sensei-chips { display: flex; gap: 6px; overflow-x: auto; padding: 2px; scrollbar-width: none; }
+.sensei-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px; }
 .sensei-chips button {
   flex: none; padding: 7px 14px; border-radius: 999px; font-size: 14px; font-weight: 600;
   background: var(--s-surface); border: 1px solid var(--s-border); color: var(--s-text);
@@ -171,7 +171,7 @@
 .sensei-verdict .sensei-loss { font-weight: 800; font-size: 18px; margin-left: auto; }
 .sensei-badge { color: #fff; border-radius: 999px; padding: 3px 12px; font-size: 13px; font-weight: 700; }
 .sensei-candidates { display: flex; flex-wrap: wrap; gap: 6px; }
-.sensei-candidates button { padding: 5px 10px; border-radius: 999px; font-size: 13px; background: var(--s-surface-2); border: 1px solid var(--s-border); color: var(--s-text); }
+.sensei-candidates button { min-height: 36px; padding: 5px 12px; border-radius: 999px; font-size: 13px; background: var(--s-surface-2); border: 1px solid var(--s-border); color: var(--s-text); }
 .sensei-candidates button b { color: var(--s-accent); margin-right: 2px; }
 .sensei-graph { width: 100%; height: auto; display: block; border-radius: 10px; touch-action: manipulation; }
 .sensei-explain { white-space: pre-wrap; line-height: 1.75; font-size: 14px; margin: 0; }

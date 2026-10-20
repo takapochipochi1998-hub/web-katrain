@@ -12,7 +12,7 @@ import { ReviewScreen } from './ReviewScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { createProblem, loadProblems, recordAttempt, sameProblem, storeProblems, type Problem } from './problems';
 import { loadPreferences, storePreferences, type Preferences } from './preferences';
-import { loadRankBook, rankLabel, saveRankBook, type RankBook } from './rankLadder';
+import { loadRankBook, rankLabel, saveRankBook, type Rank, type RankBook } from './rankLadder';
 import { mainLine } from './reviewModel';
 import { gameIdFor, loadSavedGames, removeGame, storeSavedGames, upsertGame, type SavedGame } from './savedGames';
 import {
@@ -66,6 +66,10 @@ export const SenseiApp: React.FC = () => {
   const [tab, setTab] = useState<Tab>('play');
   const [view, setView] = useState<View>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [reviewRank, setReviewRank] = useState<Rank>(() => {
+    const book = loadRankBook();
+    return book[19].rank ?? book[13].rank ?? book[9].rank ?? '5k';
+  });
 
   // Review is the point of this mode, and the bundled test net is too weak for it.
   useEffect(() => {
@@ -182,7 +186,9 @@ export const SenseiApp: React.FC = () => {
     content = (
       <ReviewScreen
         key={meta?.startedAt ?? 0}
-        title={meta ? `${meta.size}路 · AI ${rankLabel(meta.aiRank)}` : '検討'}
+        title={meta ? `${meta.size}路 · AI ${rankLabel(meta.aiRank)}` : '読み込んだ棋譜'}
+        playerRank={reviewRank}
+        onPlayerRankChange={setReviewRank}
         geminiApiKey={prefs.geminiApiKey}
         geminiModel={prefs.geminiModel}
         onBack={() => setView(null)}
@@ -198,6 +204,16 @@ export const SenseiApp: React.FC = () => {
       <GamesScreen
         games={games}
         onOpen={openGame}
+        onImport={(sgf) => {
+          try {
+            loadSgfToEnd(sgf);
+          } catch (e) {
+            setToast(e instanceof Error ? `読み込めませんでした: ${e.message}` : '読み込めませんでした');
+            return;
+          }
+          setMeta(null);
+          setView('review');
+        }}
         onDelete={(id) => setGames((list) => { const next = removeGame(list, id); storeSavedGames(next); return next; })}
       />
     );
@@ -221,8 +237,8 @@ export const SenseiApp: React.FC = () => {
             <button
               key={t.id}
               type="button"
-              className={!view && tab === t.id ? 'is-active' : ''}
-              aria-current={!view && tab === t.id ? 'page' : undefined}
+              className={tab === t.id ? 'is-active' : ''}
+              aria-current={tab === t.id ? 'page' : undefined}
               onClick={() => { setView(null); setTab(t.id); }}
             >
               {t.icon}

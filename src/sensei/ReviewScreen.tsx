@@ -19,6 +19,8 @@ import { resultLabel } from './gameResult';
 import { pointLabel } from './coords';
 import { explainMove, factsForMove } from './explain';
 import { Header, Segmented, Switch } from './ui';
+import { RankPicker } from './RankPicker';
+import { humanProfileFor, rankLabel, type Rank } from './rankLadder';
 
 const DEPTHS = [
   { value: 200, label: '速い' },
@@ -46,6 +48,9 @@ const answeredTryouts = new WeakSet<GameNode>();
 
 type Props = {
   title: string;
+  /** The player's rank, for "how often would a player of my rank play this?" */
+  playerRank: Rank;
+  onPlayerRankChange: (rank: Rank) => void;
   geminiApiKey: string;
   geminiModel: string;
   onBack: () => void;
@@ -55,7 +60,7 @@ type Props = {
 };
 
 /** Reviewing a finished game: mistakes, candidates, the score graph and try-outs. */
-export const ReviewScreen: React.FC<Props> = ({ title, geminiApiKey, geminiModel, onBack, onAddProblem, onPlayFromHere, onOpenSettings }) => {
+export const ReviewScreen: React.FC<Props> = ({ title, playerRank, onPlayerRankChange, geminiApiKey, geminiModel, onBack, onAddProblem, onPlayFromHere, onOpenSettings }) => {
   const rootNode = useGameStore((s) => s.rootNode);
   const currentNode = useGameStore((s) => s.currentNode);
   const board = useGameStore((s) => s.board);
@@ -65,6 +70,7 @@ export const ReviewScreen: React.FC<Props> = ({ title, geminiApiKey, geminiModel
   const analysisData = useGameStore((s) => s.analysisData);
   const treeVersion = useGameStore((s) => s.treeVersion);
   const katagoVisits = useGameStore((s) => s.settings.katagoVisits);
+  const humanSlEnabled = useGameStore((s) => s.settings.humanSlEnabled);
 
   const [autoReply, setAutoReply] = useState(true);
   const [explanation, setExplanation] = useState<{ nodeId: string; text: string } | null>(null);
@@ -79,6 +85,15 @@ export const ReviewScreen: React.FC<Props> = ({ title, geminiApiKey, geminiModel
     store.navigateStart();
     if (mainLine(store.rootNode).some((node) => !node.analysis)) store.startFastGameAnalysis();
   }, []);
+
+  // "打ち手の級位": read each position with the human net at the player's rank too.
+  useEffect(() => {
+    const store = useGameStore.getState();
+    const profile = humanProfileFor(playerRank);
+    if (store.settings.humanSlEnabled && store.settings.humanSlProfile === profile) return;
+    store.updateSettings({ humanSlEnabled: true, humanSlProfile: profile });
+    void useGameStore.getState().runAnalysis({ force: true });
+  }, [playerRank]);
 
   // treeVersion: analysis lands on nodes in place, so derive again when it moves.
   const line = useMemo(() => mainLine(rootNode), [rootNode, treeVersion]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -100,6 +115,15 @@ export const ReviewScreen: React.FC<Props> = ({ title, geminiApiKey, geminiModel
   const replyMove = autoReplied ? currentNode.move : null;
   // The node whose move "AIに聞く" explains.
   const explainNode = onMain ? line[anchorIndex + 1] : judgedNode;
+
+  // How likely a player of the chosen rank was to play the judged move.
+  const judgedMove = onMain ? line[anchorIndex + 1]?.move : judgedNode.move;
+  const positionBefore = onMain ? anchor : judgedNode.parent;
+  const humanPolicy = (positionBefore === currentNode ? analysisData?.humanPolicy : undefined) ?? positionBefore?.analysis?.humanPolicy;
+  const size = board.length;
+  const humanProb = humanSlEnabled && humanPolicy && judgedMove && judgedMove.x >= 0
+    ? humanPolicy[judgedMove.y * size + judgedMove.x]
+    : undefined;
 
   // analysisData is the live (still deepening) analysis of the current node.
   const analysis = analysisData ?? currentNode.analysis ?? null;
@@ -194,6 +218,9 @@ export const ReviewScreen: React.FC<Props> = ({ title, geminiApiKey, geminiModel
               {judged ? <Verdict verdict={judged} /> : <span className="sensei-muted">終局</span>}
             </div>
             {replyMove && replyMove.x >= 0 && <div className="sensei-muted">AIの応手: {pointLabel(replyMove.x, replyMove.y)}</div>}
+            {typeof humanProb === 'number' && humanProb >= 0 && (
+              <div className="sensei-muted">{rankLabel(playerRank)}の人がこの手を打つ確率: {(humanProb * 100).toFixed(1)}%</div>
+            )}
             {candidates.length > 0 && (
               <div className="sensei-candidates">
                 {candidates.map((m, i) => (
@@ -204,6 +231,12 @@ export const ReviewScreen: React.FC<Props> = ({ title, geminiApiKey, geminiModel
               </div>
             )}
           </div>
+
+          <ScoreGraph series={series} verdicts={verdicts} currentMove={Math.max(0, anchorIndex)} onSelect={(n) => goTo(line[Math.min(n, line.length - 1)])} />
+          <p className="sensei-muted">
+            {isGameAnalysisRunning ? `対局を解析中… ${done} / ${total}` : `悪手・敗着 ${mistakes.length}手`}
+            {result ? ` · ${resultLabel(result)}` : ''}
+          </p>
 
           <div className="sensei-card sensei-stack">
             <div className="sensei-row">
@@ -221,18 +254,16 @@ export const ReviewScreen: React.FC<Props> = ({ title, geminiApiKey, geminiModel
             )}
           </div>
 
-          <ScoreGraph series={series} verdicts={verdicts} currentMove={Math.max(0, anchorIndex)} onSelect={(n) => goTo(line[Math.min(n, line.length - 1)])} />
-          <p className="sensei-muted">
-            {isGameAnalysisRunning ? `対局を解析中… ${done} / ${total}` : `悪手・敗着 ${mistakes.length}手`}
-            {result ? ` · ${resultLabel(result)}` : ''}
-          </p>
-
           <div className="sensei-toolbar">
             <button type="button" className="sensei-secondary" disabled={candidates.length === 0} onClick={() => onAddProblem(currentNode)}>問題集に追加</button>
             <button type="button" className="sensei-secondary" onClick={() => onPlayFromHere(currentNode)}>この局面からAIと対局</button>
           </div>
 
-          <div className="sensei-card">
+          <div className="sensei-card sensei-stack">
+            <div className="flex flex-col gap-2">
+              <span>打ち手の級位</span>
+              <RankPicker value={playerRank} onChange={onPlayerRankChange} />
+            </div>
             <div className="sensei-row">
               <span>読みの深さ</span>
               <Segmented

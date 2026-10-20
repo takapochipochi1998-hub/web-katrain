@@ -7,6 +7,8 @@ import { Dialog, Header } from './ui';
 type Props = {
   games: readonly SavedGame[];
   onOpen: (game: SavedGame) => void;
+  /** Review a game record from elsewhere (it is not added to this list). */
+  onImport: (sgf: string) => void;
   onDelete: (id: string) => void;
 };
 
@@ -14,12 +16,25 @@ const dateLabel = (ms: number) =>
   new Date(ms).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 /** Every game against the bot: open a finished one to review, an unfinished one to resume. */
-export const GamesScreen: React.FC<Props> = ({ games, onOpen, onDelete }) => {
+export const GamesScreen: React.FC<Props> = ({ games, onOpen, onImport, onDelete }) => {
   const [pendingDelete, setPendingDelete] = useState<SavedGame | null>(null);
   return (
     <>
       <Header title="棋譜" />
       <div className="sensei-page">
+        <label className="sensei-secondary sensei-block cursor-pointer">
+          SGFを読み込んで検討する
+          <input
+            type="file"
+            accept=".sgf,application/x-go-sgf,text/plain"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (file) void file.text().then(onImport);
+            }}
+          />
+        </label>
         {games.length === 0 ? (
           <p className="sensei-empty">まだ対局がありません。<br />「対局」タブからAIと打つと、ここに残ります。</p>
         ) : (
