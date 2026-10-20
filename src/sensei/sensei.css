@@ -1,0 +1,110 @@
+/* The simple shell, styled after AI Sensei: dark navigation, light content. */
+.sensei-app {
+  --s-nav: #1d2333;
+  --s-nav-text: #e8ebf2;
+  --s-bg: #eeeeee;
+  --s-card: #c9d9f7;
+  --s-text: #1b1b1b;
+  --s-primary: #0f4c81;
+  --s-dark: #2d3446;
+  --s-green: #1f7a1f;
+  --s-seg: #8f9cb8;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--s-bg);
+  color: var(--s-text);
+  font-family: system-ui, -apple-system, 'Hiragino Sans', sans-serif;
+}
+
+.sensei-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 10px;
+  padding-top: max(8px, env(safe-area-inset-top));
+  background: var(--s-nav);
+  color: var(--s-nav-text);
+  overflow-x: auto;
+}
+.sensei-logo { font-weight: 800; margin-right: 8px; white-space: nowrap; }
+.sensei-nav button {
+  padding: 6px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  font-size: 14px;
+}
+.sensei-nav button.is-active { background: rgba(255, 255, 255, 0.15); }
+.sensei-nav-detail { margin-left: auto; opacity: 0.75; }
+
+.sensei-main { flex: 1; min-height: 0; }
+.sensei-page { max-width: 640px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.sensei-title { font-size: 24px; }
+
+.sensei-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.sensei-tabs button {
+  border: 1.5px solid #333;
+  border-radius: 999px;
+  padding: 3px 12px;
+  font-weight: 700;
+  font-size: 14px;
+  background: #fff;
+}
+.sensei-tabs button.is-active { box-shadow: 0 0 0 2px #333; }
+
+.sensei-card { background: var(--s-card); border-radius: 4px; padding: 16px; }
+.sensei-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+.sensei-segmented { display: flex; flex: 1; max-width: 360px; background: var(--s-seg); border-radius: 8px; padding: 2px; }
+.sensei-segmented button { flex: 1; padding: 6px 0; border-radius: 6px; font-size: 14px; }
+.sensei-segmented button.is-active { background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); }
+
+.sensei-step { width: 28px; height: 28px; border-radius: 4px; background: #555; color: #fff; font-weight: 700; }
+.sensei-range { accent-color: var(--s-primary); }
+
+.sensei-primary, .sensei-dark, .sensei-green, .sensei-secondary {
+  padding: 8px 14px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+.sensei-primary { background: var(--s-primary); color: #fff; }
+.sensei-dark { background: var(--s-dark); color: #fff; }
+.sensei-green { background: var(--s-green); color: #fff; }
+.sensei-secondary { background: #fff; border: 1px solid #999; }
+.sensei-dark:disabled { opacity: 0.45; }
+
+/* Game */
+.sensei-game { display: flex; flex-direction: column; }
+.sensei-board-wrap { background: #dcb46c; }
+.sensei-board { display: block; width: 100%; max-width: min(100vw, 100dvh - 120px); margin: 0 auto; touch-action: manipulation; user-select: none; }
+.sensei-side { padding: 12px 16px; display: flex; flex-direction: column; gap: 12px; background: #d6d8dc; flex: 1; }
+.sensei-players { display: flex; flex-direction: column; gap: 4px; }
+.sensei-status { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sensei-stone { width: 18px; height: 18px; border-radius: 50%; display: inline-block; }
+.sensei-stone-black { background: radial-gradient(circle at 35% 35%, #666, #000); }
+.sensei-stone-white { background: radial-gradient(circle at 35% 35%, #fff, #c8c8c8); border: 1px solid #999; }
+.sensei-spinner {
+  display: inline-block; width: 14px; height: 14px; margin-left: 6px; vertical-align: -2px;
+  border: 2px solid #999; border-top-color: transparent; border-radius: 50%;
+  animation: sensei-spin 0.8s linear infinite;
+}
+@keyframes sensei-spin { to { transform: rotate(360deg); } }
+
+@media (min-width: 900px) {
+  .sensei-game { flex-direction: row; height: calc(100dvh - 48px); }
+  .sensei-board-wrap { flex: 1; display: flex; align-items: center; }
+  .sensei-board { max-width: calc(100dvh - 48px); }
+  .sensei-side { width: 340px; flex: none; }
+}
+
+/* Dialogs */
+.sensei-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
+.sensei-dialog { background: #fff; color: var(--s-text); border-radius: 6px; padding: 16px; width: min(360px, 100%); }
+.sensei-result { background: #fff3c4; padding: 10px 12px; border-radius: 4px; }
+
+/* Way back from the detail mode */
+.sensei-back-to-simple {
+  position: fixed; left: 52px; top: calc(12px + env(safe-area-inset-top)); z-index: 60;
+  padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: 700;
+  background: #0f4c81; color: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
