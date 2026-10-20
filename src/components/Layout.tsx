@@ -136,6 +136,8 @@ import { resetSoundFailureReport, setSoundInitErrorHandler, warmAudioContext } f
 import { getSgfImportSizeError } from '../utils/sgfImportLimits';
 import { GAME_RECORD_ACCEPT, GAME_RECORD_EXTENSION, isGameRecordFile, readGameRecordFile } from '../utils/gameRecordImport';
 import { getPvAnimationProgress } from '../utils/pvAnimation';
+import { startDomTranslation } from '../i18n/domTranslate';
+import { JA_DICTIONARY } from '../i18n/ja';
 
 const settingsModalChunk = createWarmableLazy(() => import('./SettingsModal'), (module) => module.SettingsModal);
 const SettingsModal = settingsModalChunk.Component;
@@ -577,6 +579,11 @@ export const Layout: React.FC = () => {
       syncThemeColorMeta();
     });
   }, [settings.appLocale, settings.uiDensity, settings.uiTheme]);
+  useEffect(() => {
+    // Modals render into portals on <body>, so watch all of it.
+    if (typeof document === 'undefined' || settings.appLocale !== 'ja') return;
+    return startDomTranslation(document.body, JA_DICTIONARY);
+  }, [settings.appLocale]);
   const [isDesktop, setIsDesktop] = useState(() => {
     return isDesktopLayoutViewport();
   });
