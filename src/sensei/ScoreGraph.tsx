@@ -38,12 +38,12 @@ export const ScoreGraph: React.FC<Props> = ({ series, verdicts, currentMove, onS
         onSelect(Math.round(((e.clientX - rect.left) / rect.width) * last));
       }}
     >
-      <rect width={W} height={H} fill="#9aa3b5" />
-      <rect width={W} height={mid} fill="#a9b1c1" />
-      {area && <path d={area} fill="#151515" opacity={0.85} />}
-      <line x1={0} y1={mid} x2={W} y2={mid} stroke="#fff" strokeWidth={0.6} />
-      <text x={4} y={mid - 4} fontSize={9} fill="#fff">黒+</text>
-      <text x={4} y={mid + 11} fontSize={9} fill="#fff">白+</text>
+      <rect width={W} height={H} fill="var(--s-surface-2)" />
+      <rect width={W} height={mid} fill="var(--s-surface)" />
+      {area && <path d={area} fill="var(--s-text)" opacity={0.78} />}
+      <line x1={0} y1={mid} x2={W} y2={mid} stroke="var(--s-border)" strokeWidth={1} />
+      <text x={6} y={14} fontSize={10} fill="var(--s-muted)">黒リード</text>
+      <text x={6} y={H - 16} fontSize={10} fill="var(--s-muted)">白リード</text>
       {verdicts.filter((v) => v.quality === 'mistake' || v.quality === 'blunder').map((v) => (
         <circle
           key={v.moveNumber}
@@ -55,7 +55,7 @@ export const ScoreGraph: React.FC<Props> = ({ series, verdicts, currentMove, onS
           strokeWidth={0.8}
         />
       ))}
-      <line x1={x(currentMove)} y1={0} x2={x(currentMove)} y2={H} stroke="#e63946" strokeWidth={1.2} />
+      <line x1={x(currentMove)} y1={0} x2={x(currentMove)} y2={H} stroke="var(--s-accent)" strokeWidth={1.6} />
     </svg>
   );
 };

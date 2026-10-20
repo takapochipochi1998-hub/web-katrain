@@ -1,15 +1,9 @@
 import React, { useState } from 'react';
 import type { BoardSize, Player } from '../types';
-import { RankPicker, Segmented } from './RankPicker';
-import {
-  rankLabel,
-  setRank,
-  shiftRank,
-  type Rank,
-  type RankBook,
-  type RankedBoardSize,
-} from './rankLadder';
-import type { GameConfig } from './session';
+import { RankHistoryChart, RankPicker } from './RankPicker';
+import { rankLabel, setRank, shiftRank, type Rank, type RankBook, type RankedBoardSize } from './rankLadder';
+import type { GameConfig, SessionMeta } from './session';
+import { Header, Segmented } from './ui';
 
 type Tab = RankedBoardSize | 'free';
 
@@ -20,95 +14,120 @@ const TAB_OPTIONS: ReadonlyArray<{ value: Tab; label: string }> = [
   { value: 'free', label: '自由対局' },
 ];
 
+const COLOR_OPTIONS = [{ value: 'black', label: '黒（先手）' }, { value: 'white', label: '白（後手）' }] as const;
 const KOMI_FOR_HANDICAP = (handicap: number) => (handicap > 0 ? 0.5 : 6.5);
 
 type Props = {
   ranks: RankBook;
   onRanksChange: (book: RankBook) => void;
   onStart: (config: GameConfig) => void;
+  /** A game still in progress, offered for resuming. */
+  ongoing: SessionMeta | null;
+  onResume: () => void;
 };
 
 /** "AIと対局": ranked tabs per board size and a free game form. */
-export const PlayScreen: React.FC<Props> = ({ ranks, onRanksChange, onStart }) => {
+export const PlayScreen: React.FC<Props> = ({ ranks, onRanksChange, onStart, ongoing, onResume }) => {
   const [tab, setTab] = useState<Tab>(19);
   return (
-    <div className="sensei-page">
-      <h1 className="sensei-title">AIと対局</h1>
-      <div className="sensei-tabs">
-        {TAB_OPTIONS.map((o) => (
-          <button key={String(o.value)} type="button" className={tab === o.value ? 'is-active' : ''} onClick={() => setTab(o.value)}>
-            {o.label}
+    <>
+      <Header title="AIと対局" />
+      <div className="sensei-page">
+        {ongoing && (
+          <button type="button" className="sensei-card sensei-list-item" onClick={onResume}>
+            <span className="sensei-stone sensei-stone-black" aria-hidden />
+            <span className="sensei-list-main">
+              <span className="sensei-list-title">対局を続ける</span>
+              <span className="sensei-muted block">
+                {ongoing.size}路 · AI {rankLabel(ongoing.aiRank)} · {ongoing.kind === 'ranked' ? 'ランク戦' : '自由対局'}
+              </span>
+            </span>
+            <span aria-hidden>›</span>
           </button>
-        ))}
+        )}
+        <div className="sensei-chips" role="tablist">
+          {TAB_OPTIONS.map((o) => (
+            <button
+              key={String(o.value)}
+              type="button"
+              role="tab"
+              aria-selected={tab === o.value}
+              className={tab === o.value ? 'is-active' : ''}
+              onClick={() => setTab(o.value)}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+        {tab === 'free'
+          ? <FreeGameForm onStart={onStart} />
+          : <RankedPanel key={tab} size={tab} ranks={ranks} onRanksChange={onRanksChange} onStart={onStart} />}
       </div>
-      {tab === 'free'
-        ? <FreeGameForm onStart={onStart} />
-        : <RankedPanel size={tab} ranks={ranks} onRanksChange={onRanksChange} onStart={onStart} />}
-    </div>
+    </>
   );
 };
 
-const RankedPanel: React.FC<Props & { size: RankedBoardSize }> = ({ size, ranks, onRanksChange, onStart }) => {
+const RankedPanel: React.FC<Pick<Props, 'ranks' | 'onRanksChange' | 'onStart'> & { size: RankedBoardSize }> = ({ size, ranks, onRanksChange, onStart }) => {
   const state = ranks[size];
   const [initial, setInitial] = useState<Rank>('10k');
   const [humanColor, setHumanColor] = useState<Player>('black');
 
   if (!state.rank) {
     return (
-      <div className="sensei-card space-y-4">
-        <p>{size}路のランク戦は初めてです。最初の棋力を選んでください。勝てば1つ強いAI、負ければ1つ弱いAIと次に対局します。</p>
+      <div className="sensei-card sensei-stack">
+        <h2>{size}路のランク戦をはじめる</h2>
+        <p className="sensei-muted">最初の棋力を1回だけ選びます。勝てば1つ強いAI、負ければ1つ弱いAIと次に対局し、自分の棋力に合った相手へ自然に近づきます。</p>
         <RankPicker value={initial} onChange={setInitial} />
-        <button type="button" className="sensei-primary" onClick={() => onRanksChange(setRank(ranks, size, initial))}>
-          この棋力で始める
+        <button type="button" className="sensei-primary sensei-block" onClick={() => onRanksChange(setRank(ranks, size, initial))}>
+          {rankLabel(initial)}から始める
         </button>
       </div>
     );
   }
 
   const rank = state.rank;
-  const recent = state.history.slice(-10).reverse();
+  const wins = state.history.filter((h) => h.outcome === 'win').length;
+  const losses = state.history.filter((h) => h.outcome === 'loss').length;
   return (
-    <div className="space-y-4">
-      <div className="sensei-card space-y-4">
-        <div className="flex items-baseline justify-between">
-          <span>現在の棋力</span>
-          <span className="text-2xl font-bold">{rankLabel(rank)}</span>
+    <>
+      <div className="sensei-card sensei-stack">
+        <div className="flex items-end justify-between">
+          <div>
+            <div className="sensei-muted">{size}路の現在の棋力</div>
+            <div className="sensei-big">{rankLabel(rank)}</div>
+          </div>
+          <div className="sensei-muted text-right">{wins}勝 {losses}敗</div>
         </div>
         <div className="sensei-row">
-          <span>プレイヤーの手番</span>
-          <Segmented options={[{ value: 'black', label: '黒' }, { value: 'white', label: '白' }]} value={humanColor} onChange={setHumanColor} />
+          <span>手番</span>
+          <Segmented options={COLOR_OPTIONS} value={humanColor} onChange={setHumanColor} label="手番" />
         </div>
         <button
           type="button"
-          className="sensei-primary"
+          className="sensei-primary sensei-block"
           onClick={() => onStart({ kind: 'ranked', size, aiRank: rank, humanColor, handicap: 0, komi: 6.5 })}
         >
-          対局開始（AI {rankLabel(rank)}）
+          AI {rankLabel(rank)}と対局する
         </button>
-        <div className="flex gap-2 text-sm">
-          <button type="button" className="sensei-secondary flex-1" onClick={() => onRanksChange(setRank(ranks, size, shiftRank(rank, -1)))}>
-            棋力を1つ下げる（{rankLabel(shiftRank(rank, -1))}）
+      </div>
+      {state.history.length >= 2 && (
+        <div className="sensei-card">
+          <h2>棋力の推移</h2>
+          <RankHistoryChart history={state.history} />
+        </div>
+      )}
+      <div className="sensei-card">
+        <h2>棋力の調整</h2>
+        <div className="sensei-toolbar">
+          <button type="button" className="sensei-secondary" onClick={() => onRanksChange(setRank(ranks, size, shiftRank(rank, -1)))}>
+            1つ下げる（{rankLabel(shiftRank(rank, -1))}）
           </button>
-          <button type="button" className="sensei-secondary flex-1" onClick={() => onRanksChange(setRank(ranks, size, shiftRank(rank, 1)))}>
-            棋力を1つ上げる（{rankLabel(shiftRank(rank, 1))}）
+          <button type="button" className="sensei-secondary" onClick={() => onRanksChange(setRank(ranks, size, shiftRank(rank, 1)))}>
+            1つ上げる（{rankLabel(shiftRank(rank, 1))}）
           </button>
         </div>
       </div>
-      {recent.length > 0 && (
-        <div className="sensei-card">
-          <h2 className="mb-2 font-bold">棋力の推移</h2>
-          <ul className="space-y-1 text-sm">
-            {recent.map((h) => (
-              <li key={h.at} className="flex justify-between">
-                <span>{new Date(h.at).toLocaleDateString('ja-JP')}</span>
-                <span>{h.outcome === 'win' ? '勝ち' : h.outcome === 'loss' ? '負け' : '持碁'}</span>
-                <span>{rankLabel(h.before)} → {rankLabel(h.after)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
+    </>
   );
 };
 
@@ -122,30 +141,31 @@ const FreeGameForm: React.FC<{ onStart: (config: GameConfig) => void }> = ({ onS
   const maxHandicap = size === 9 ? 5 : 9;
 
   return (
-    <div className="sensei-card space-y-4">
+    <div className="sensei-card sensei-stack">
       <div className="sensei-row">
-        <span>盤面</span>
+        <span>盤の大きさ</span>
         <Segmented
-          options={[{ value: 9, label: '9x9' }, { value: 13, label: '13x13' }, { value: 19, label: '19x19' }]}
+          options={[{ value: 9, label: '9路' }, { value: 13, label: '13路' }, { value: 19, label: '19路' }]}
           value={size}
           onChange={(s) => { setSize(s); setHandicap((h) => Math.min(h, s === 9 ? 5 : 9)); }}
+          label="盤の大きさ"
         />
       </div>
-      <div className="space-y-1">
-        <label htmlFor="sensei-ai-rank">AIの棋力（レベル）</label>
+      <div className="flex flex-col gap-2">
+        <label htmlFor="sensei-ai-rank">AIの棋力</label>
         <RankPicker id="sensei-ai-rank" value={aiRank} onChange={setAiRank} />
       </div>
       <div className="sensei-row">
-        <span>プレイヤーの手番</span>
-        <Segmented options={[{ value: 'black', label: '黒' }, { value: 'white', label: '白' }]} value={humanColor} onChange={setHumanColor} />
+        <span>手番</span>
+        <Segmented options={COLOR_OPTIONS} value={humanColor} onChange={setHumanColor} label="手番" />
       </div>
-      <button type="button" className="text-sm underline" onClick={() => setShowDetails((v) => !v)}>
+      <button type="button" className="sensei-ghost self-start !px-0" onClick={() => setShowDetails((v) => !v)}>
         詳細設定 {showDetails ? '▲' : '▼'}
       </button>
       {showDetails && (
-        <div className="space-y-3">
-          <div className="space-y-1">
-            <label htmlFor="sensei-handicap">置石: {handicap}</label>
+        <div className="sensei-stack">
+          <div className="flex flex-col gap-1">
+            <label htmlFor="sensei-handicap">置石: {handicap === 0 ? 'なし' : `${handicap}子`}</label>
             <input
               id="sensei-handicap"
               type="range"
@@ -156,24 +176,15 @@ const FreeGameForm: React.FC<{ onStart: (config: GameConfig) => void }> = ({ onS
               className="sensei-range w-full"
             />
           </div>
-          <div className="space-y-1">
-            <label htmlFor="sensei-komi">コミ: {komi}</label>
-            <input
-              id="sensei-komi"
-              type="range"
-              min={-9.5}
-              max={9.5}
-              step={1}
-              value={komi}
-              onChange={(e) => setKomi(Number(e.target.value))}
-              className="sensei-range w-full"
-            />
+          <div className="flex flex-col gap-1">
+            <label htmlFor="sensei-komi">コミ: {komi}目</label>
+            <input id="sensei-komi" type="range" min={-9.5} max={9.5} step={1} value={komi} onChange={(e) => setKomi(Number(e.target.value))} className="sensei-range w-full" />
           </div>
         </div>
       )}
       <button
         type="button"
-        className="sensei-primary"
+        className="sensei-primary sensei-block"
         onClick={() => onStart({ kind: 'free', size, aiRank, humanColor, handicap, komi })}
       >
         対局開始

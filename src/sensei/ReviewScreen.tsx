@@ -3,7 +3,6 @@ import { useGameStore } from '../store/gameStore';
 import type { GameNode } from '../types';
 import { SenseiBoard, type BoardMarker } from './SenseiBoard';
 import { ScoreGraph } from './ScoreGraph';
-import { Segmented } from './RankPicker';
 import { MOVE_QUALITY_LABEL, type MoveQuality } from './moveQuality';
 import {
   branchPoint,
@@ -17,6 +16,9 @@ import {
   type MoveVerdict,
 } from './reviewModel';
 import { resultLabel } from './gameResult';
+import { pointLabel } from './coords';
+import { explainMove, factsForMove } from './explain';
+import { Header, Segmented, Switch } from './ui';
 
 const DEPTHS = [
   { value: 200, label: '速い' },
@@ -26,14 +28,14 @@ const DEPTHS = [
 type Depth = (typeof DEPTHS)[number]['value'];
 
 const QUALITY_COLOR: Record<MoveQuality, string> = {
-  best: '#2f6fdc',
-  good: '#3a9a3a',
-  inaccuracy: '#8a8a3a',
-  mistake: '#e07a1f',
-  blunder: '#d7263d',
+  best: '#2f5bd3',
+  good: '#2e8b57',
+  inaccuracy: '#8d8a3c',
+  mistake: '#d97b20',
+  blunder: '#d2333f',
 };
 
-/** Points to wait for before the auto-reply trusts the engine's first choice. */
+/** Visits to wait for before the auto-reply trusts the engine's first choice. */
 const AUTO_REPLY_MIN_VISITS = 64;
 
 const isPass = (m: { x: number } | null | undefined) => !!m && m.x < 0;
@@ -41,10 +43,19 @@ const isPass = (m: { x: number } | null | undefined) => !!m && m.x < 0;
 /** Try-out moves the player made, and those the engine has already answered. */
 const playerTryouts = new WeakSet<GameNode>();
 const answeredTryouts = new WeakSet<GameNode>();
-const KANJI_ROWS = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九'];
+
+type Props = {
+  title: string;
+  geminiApiKey: string;
+  geminiModel: string;
+  onBack: () => void;
+  onAddProblem: (node: GameNode) => void;
+  onPlayFromHere: (node: GameNode) => void;
+  onOpenSettings: () => void;
+};
 
 /** Reviewing a finished game: mistakes, candidates, the score graph and try-outs. */
-export const ReviewScreen: React.FC<{ onPlayAgain: () => void }> = ({ onPlayAgain }) => {
+export const ReviewScreen: React.FC<Props> = ({ title, geminiApiKey, geminiModel, onBack, onAddProblem, onPlayFromHere, onOpenSettings }) => {
   const rootNode = useGameStore((s) => s.rootNode);
   const currentNode = useGameStore((s) => s.currentNode);
   const board = useGameStore((s) => s.board);
@@ -56,6 +67,9 @@ export const ReviewScreen: React.FC<{ onPlayAgain: () => void }> = ({ onPlayAgai
   const katagoVisits = useGameStore((s) => s.settings.katagoVisits);
 
   const [autoReply, setAutoReply] = useState(true);
+  const [explanation, setExplanation] = useState<{ nodeId: string; text: string } | null>(null);
+  const [explaining, setExplaining] = useState<string | null>(null);
+  const [explainError, setExplainError] = useState<string | null>(null);
 
   // Set the store up for reviewing once: no bot, live analysis on, a quick pass over the game.
   useEffect(() => {
@@ -84,6 +98,8 @@ export const ReviewScreen: React.FC<{ onPlayAgain: () => void }> = ({ onPlayAgai
     ? verdicts.find((v) => v.moveNumber === anchorIndex + 1) ?? null
     : judgeMove(judgedNode, judgedNode.gameState.moveHistory.length);
   const replyMove = autoReplied ? currentNode.move : null;
+  // The node whose move "AIに聞く" explains.
+  const explainNode = onMain ? line[anchorIndex + 1] : judgedNode;
 
   // analysisData is the live (still deepening) analysis of the current node.
   const analysis = analysisData ?? currentNode.analysis ?? null;
@@ -116,89 +132,131 @@ export const ReviewScreen: React.FC<{ onPlayAgain: () => void }> = ({ onPlayAgai
   const nextMistake = mistakes.find((v) => v.moveNumber > anchorIndex + 1);
   const prevMistake = [...mistakes].reverse().find((v) => v.moveNumber < anchorIndex + 1);
 
+  const ask = async () => {
+    if (!explainNode) return;
+    const facts = factsForMove(explainNode);
+    setExplainError(null);
+    if (!facts) { setExplainError('この手はまだ解析が終わっていません。少し待ってからもう一度押してください。'); return; }
+    setExplaining(explainNode.id);
+    try {
+      const text = await explainMove({ apiKey: geminiApiKey, model: geminiModel, facts });
+      setExplanation({ nodeId: explainNode.id, text });
+    } catch (e) {
+      setExplainError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setExplaining(null);
+    }
+  };
+
   const markers: BoardMarker[] = candidates.map((m, i) => ({
     x: m.x,
     y: m.y,
     label: candidateLetter(i),
-    fill: i === 0 ? '#2f6fdc' : '#7fb24a',
+    fill: i === 0 ? '#2f5bd3' : '#3f9a63',
     textColor: '#fff',
   }));
   const lastMove = currentNode.move && !isPass(currentNode.move) ? currentNode.move : null;
+  const shownExplanation = explanation && explainNode && explanation.nodeId === explainNode.id ? explanation.text : null;
 
   return (
-    <div className="sensei-game">
-      <div className="sensei-board-wrap">
-        <SenseiBoard board={board} lastMove={lastMove} markers={markers} onTap={tryMove} />
-      </div>
-      <aside className="sensei-side">
-        <div className="sensei-nav-buttons">
-          <button type="button" aria-label="最初へ" onClick={() => goTo(line[0])}>⏮</button>
-          <button type="button" disabled={!prevMistake} onClick={() => goTo(prevMistake && line[prevMistake.moveNumber - 1])}>前の悪手</button>
-          <button type="button" aria-label="1手戻る" onClick={() => useGameStore.getState().navigateBack()}>◀</button>
-          <button type="button" aria-label="1手進む" onClick={() => goTo(onMain ? line[anchorIndex + 1] : currentNode.children[0])}>▶</button>
-          <button type="button" disabled={!nextMistake} onClick={() => goTo(nextMistake && line[nextMistake.moveNumber - 1])}>次の悪手</button>
-          <button type="button" aria-label="最後へ" onClick={() => goTo(line[line.length - 1])}>⏭</button>
+    <>
+      <Header
+        title={title}
+        left={<button type="button" className="sensei-back" onClick={onBack}>‹ 戻る</button>}
+        right={<span className="sensei-muted">{anchorIndex}手目</span>}
+      />
+      <div className="sensei-game">
+        <div className="sensei-board-wrap">
+          <SenseiBoard board={board} lastMove={lastMove} markers={markers} onTap={tryMove} />
         </div>
-
-        {!onMain && (
-          <div className="sensei-trial">
-            <span>試し打ち中</span>
-            <label className="flex items-center gap-1 text-sm">
-              <input type="checkbox" checked={autoReply} onChange={(e) => setAutoReply(e.target.checked)} />
-              AIが自動で応手
-            </label>
-            <button type="button" className="sensei-dark" onClick={() => goTo(anchor)}>実戦に戻る</button>
+        <div className="sensei-side">
+          <div className="sensei-nav-buttons">
+            <button type="button" aria-label="最初へ" onClick={() => goTo(line[0])}>«</button>
+            <button type="button" className="is-mistake" disabled={!prevMistake} onClick={() => goTo(prevMistake && line[prevMistake.moveNumber - 1])}>前の悪手</button>
+            <button type="button" aria-label="1手戻る" onClick={() => useGameStore.getState().navigateBack()}>‹</button>
+            <button type="button" aria-label="1手進む" onClick={() => goTo(onMain ? line[anchorIndex + 1] : currentNode.children[0])}>›</button>
+            <button type="button" className="is-mistake" disabled={!nextMistake} onClick={() => goTo(nextMistake && line[nextMistake.moveNumber - 1])}>次の悪手</button>
+            <button type="button" aria-label="最後へ" onClick={() => goTo(line[line.length - 1])}>»</button>
           </div>
-        )}
 
-        <div className="sensei-verdict">
-          <span className="text-sm">{onMain ? '次の一手' : '試し打ちの手'}</span>
-          {judged ? <Verdict verdict={judged} /> : <span className="text-sm">終局</span>}
+          {!onMain && (
+            <div className="sensei-trial">
+              <strong>試し打ち中</strong>
+              <span className="text-sm">AIが応手</span>
+              <Switch checked={autoReply} onChange={setAutoReply} label="AIが自動で応手" />
+              <button type="button" className="sensei-primary" onClick={() => goTo(anchor)}>実戦に戻る</button>
+            </div>
+          )}
+
+          <div className="sensei-card sensei-stack">
+            <div className="sensei-verdict">
+              <span className="sensei-muted">{onMain ? '次の一手' : 'あなたの試し打ち'}</span>
+              {judged ? <Verdict verdict={judged} /> : <span className="sensei-muted">終局</span>}
+            </div>
+            {replyMove && replyMove.x >= 0 && <div className="sensei-muted">AIの応手: {pointLabel(replyMove.x, replyMove.y)}</div>}
+            {candidates.length > 0 && (
+              <div className="sensei-candidates">
+                {candidates.map((m, i) => (
+                  <button key={`${m.x}-${m.y}`} type="button" onClick={() => tryMove(m.x, m.y)}>
+                    <b>{candidateLetter(i)}</b>{i === 0 ? '最善' : `−${Math.max(0, m.pointsLost).toFixed(1)}`}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="sensei-card sensei-stack">
+            <div className="sensei-row">
+              <strong>AIに聞く</strong>
+              <button type="button" className="sensei-secondary" disabled={!explainNode || !!explaining} onClick={() => void ask()}>
+                {explaining ? <>考え中 <span className="sensei-spinner" aria-hidden /></> : 'この手を解説'}
+              </button>
+            </div>
+            {shownExplanation && <p className="sensei-explain">{shownExplanation}</p>}
+            {explainError && (
+              <p className="sensei-muted">
+                {explainError}
+                {!geminiApiKey && <> <button type="button" className="sensei-ghost" onClick={onOpenSettings}>設定を開く</button></>}
+              </p>
+            )}
+          </div>
+
+          <ScoreGraph series={series} verdicts={verdicts} currentMove={Math.max(0, anchorIndex)} onSelect={(n) => goTo(line[Math.min(n, line.length - 1)])} />
+          <p className="sensei-muted">
+            {isGameAnalysisRunning ? `対局を解析中… ${done} / ${total}` : `悪手・敗着 ${mistakes.length}手`}
+            {result ? ` · ${resultLabel(result)}` : ''}
+          </p>
+
+          <div className="sensei-toolbar">
+            <button type="button" className="sensei-secondary" disabled={candidates.length === 0} onClick={() => onAddProblem(currentNode)}>問題集に追加</button>
+            <button type="button" className="sensei-secondary" onClick={() => onPlayFromHere(currentNode)}>この局面からAIと対局</button>
+          </div>
+
+          <div className="sensei-card">
+            <div className="sensei-row">
+              <span>読みの深さ</span>
+              <Segmented
+                options={DEPTHS}
+                value={(DEPTHS.find((d) => d.value === katagoVisits)?.value ?? 1000) as Depth}
+                onChange={(v) => useGameStore.getState().updateSettings({ katagoVisits: v })}
+                label="読みの深さ"
+              />
+            </div>
+          </div>
         </div>
-        {replyMove && replyMove.x >= 0 && (
-          <p className="text-sm">AIの応手: {replyMove.x + 1}の{KANJI_ROWS[replyMove.y]}</p>
-        )}
-
-        {candidates.length > 0 && (
-          <ul className="sensei-candidates">
-            {candidates.map((m, i) => (
-              <li key={`${m.x}-${m.y}`}>
-                <button type="button" onClick={() => tryMove(m.x, m.y)}>
-                  <b>{candidateLetter(i)}</b> {i === 0 ? 'AIの一手' : `−${Math.max(0, m.pointsLost).toFixed(1)}目`}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <ScoreGraph series={series} verdicts={verdicts} currentMove={Math.max(0, anchorIndex)} onSelect={(n) => goTo(line[Math.min(n, line.length - 1)])} />
-        <p className="text-xs">
-          {isGameAnalysisRunning ? `対局を解析中… ${done} / ${total}` : `悪手 ${mistakes.length}手`}
-          {result ? ` · ${resultLabel(result)}` : ''}
-        </p>
-
-        <div className="sensei-row text-sm">
-          <span>読みの深さ</span>
-          <Segmented
-            options={DEPTHS}
-            value={(DEPTHS.find((d) => d.value === katagoVisits)?.value ?? 1000) as Depth}
-            onChange={(v) => useGameStore.getState().updateSettings({ katagoVisits: v })}
-          />
-        </div>
-        <button type="button" className="sensei-green" onClick={onPlayAgain}>もう一度対局</button>
-      </aside>
-    </div>
+      </div>
+    </>
   );
 };
 
 const Verdict: React.FC<{ verdict: MoveVerdict }> = ({ verdict }) => {
-  if (verdict.quality === null) return <span className="text-sm">{verdict.moveNumber}手目 · 解析中…</span>;
+  if (verdict.quality === null) return <span className="sensei-muted">{verdict.moveNumber}手目 · 解析中…</span>;
   const label = verdict.quality === 'best' ? 'AIの一手' : MOVE_QUALITY_LABEL[verdict.quality];
   return (
-    <span className="flex items-center gap-2">
-      <span className="text-sm">{verdict.moveNumber}手目</span>
+    <>
+      <span className="font-bold">{verdict.moveNumber}手目</span>
       <span className="sensei-badge" style={{ background: QUALITY_COLOR[verdict.quality] }}>{label}</span>
-      {verdict.quality !== 'best' && <span className="font-bold">−{verdict.pointsLost!.toFixed(1)}目</span>}
-    </span>
+      {verdict.quality !== 'best' && <span className="sensei-loss">−{verdict.pointsLost!.toFixed(1)}目</span>}
+    </>
   );
 };

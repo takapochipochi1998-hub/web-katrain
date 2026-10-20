@@ -1,22 +1,71 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { isSmallKataGoModel, KATAGO_RECOMMENDED_MODEL_PATH } from '../engine/katago/modelDefaults';
 import { useGameStore } from '../store/gameStore';
+import type { GameNode } from '../types';
 import { publicUrl } from '../utils/publicUrl';
+import { generateSgfFromTree } from '../utils/sgf';
 import { GameScreen } from './GameScreen';
+import { GamesScreen } from './GamesScreen';
 import { PlayScreen } from './PlayScreen';
+import { ProblemsScreen } from './ProblemsScreen';
 import { ReviewScreen } from './ReviewScreen';
-import { loadRankBook, saveRankBook, type RankBook } from './rankLadder';
-import { loadSession, startGame, type GameConfig, type SessionMeta } from './session';
-import { setUiMode } from './uiMode';
+import { SettingsScreen } from './SettingsScreen';
+import { createProblem, loadProblems, recordAttempt, sameProblem, storeProblems, type Problem } from './problems';
+import { loadPreferences, storePreferences, type Preferences } from './preferences';
+import { loadRankBook, rankLabel, saveRankBook, type RankBook } from './rankLadder';
+import { mainLine } from './reviewModel';
+import { gameIdFor, loadSavedGames, removeGame, storeSavedGames, upsertGame, type SavedGame } from './savedGames';
+import {
+  loadSession,
+  loadSgfToEnd,
+  resumeGame,
+  saveSession,
+  startFromPosition,
+  startGame,
+  type GameConfig,
+  type SessionMeta,
+} from './session';
+import { Icons } from './icons';
+import { Toast } from './ui';
 
-type Screen = 'play' | 'game' | 'review';
+type Tab = 'play' | 'games' | 'problems' | 'settings';
+type View = 'game' | 'review' | null;
 
-/** The AI Sensei-style shell: play against the bot, then review. */
+const TABS: ReadonlyArray<{ id: Tab; label: string; icon: React.ReactNode }> = [
+  { id: 'play', label: '対局', icon: Icons.play },
+  { id: 'games', label: '棋譜', icon: Icons.games },
+  { id: 'problems', label: '次の一手', icon: Icons.problems },
+  { id: 'settings', label: '設定', icon: Icons.settings },
+];
+
+/** Snapshot of the game in the store, ready for the game list. */
+function snapshot(meta: SessionMeta, previous: SavedGame | undefined): SavedGame {
+  const { rootNode } = useGameStore.getState();
+  const line = mainLine(rootNode);
+  const last = line[line.length - 1]!;
+  const result = last.endState ?? rootNode.properties?.RE?.[0] ?? null;
+  return {
+    id: gameIdFor(meta),
+    meta,
+    sgf: generateSgfFromTree(rootNode),
+    result,
+    moveCount: line.length - 1,
+    // Reviewing an old game should not move it to the top of the list.
+    updatedAt: previous?.result ? previous.updatedAt : Date.now(),
+  };
+}
+
+/** The AI Sensei-style shell: play against the bot, review, practise. */
 export const SenseiApp: React.FC = () => {
   const [ranks, setRanks] = useState<RankBook>(() => loadRankBook());
   const [meta, setMeta] = useState<SessionMeta | null>(() => loadSession());
+  const [games, setGames] = useState<SavedGame[]>(() => loadSavedGames());
+  const [problems, setProblems] = useState<Problem[]>(() => loadProblems());
+  const [prefs, setPrefs] = useState<Preferences>(() => loadPreferences());
   const [lastConfig, setLastConfig] = useState<GameConfig | null>(null);
-  const [screen, setScreen] = useState<Screen>('play');
+  const [tab, setTab] = useState<Tab>('play');
+  const [view, setView] = useState<View>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   // Review is the point of this mode, and the bundled test net is too weak for it.
   useEffect(() => {
@@ -26,52 +75,165 @@ export const SenseiApp: React.FC = () => {
     }
   }, []);
 
-  const updateRanks = useCallback((book: RankBook) => {
-    setRanks(book);
-    saveRankBook(book);
-  }, []);
+  // A reload drops the store's game; bring back an unfinished one where it was left.
+  useEffect(() => {
+    if (!meta) return;
+    const saved = loadSavedGames().find((g) => g.id === gameIdFor(meta));
+    if (saved && !saved.result && useGameStore.getState().rootNode.children.length === 0) {
+      resumeGame(meta, saved.sgf);
+    }
+    // Only on start.
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keep the current game in the list as it changes.
+  useEffect(() => {
+    if (!meta) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const save = () => setGames((list) => {
+      const next = upsertGame(list, snapshot(meta, list.find((g) => g.id === gameIdFor(meta))));
+      storeSavedGames(next);
+      return next;
+    });
+    const unsubscribe = useGameStore.subscribe((state, prev) => {
+      if (state.treeVersion === prev.treeVersion && state.rootNode === prev.rootNode) return;
+      if (state.rootNode.children.length === 0) return;
+      clearTimeout(timer);
+      timer = setTimeout(save, 800);
+    });
+    return () => { clearTimeout(timer); unsubscribe(); };
+  }, [meta]);
+
+  const updateRanks = useCallback((book: RankBook) => { setRanks(book); saveRankBook(book); }, []);
+  const updatePrefs = (next: Preferences) => { setPrefs(next); storePreferences(next); };
+  const updateProblems = (next: Problem[]) => { setProblems(next); storeProblems(next); };
 
   const begin = (config: GameConfig) => {
     setLastConfig(config);
     setMeta(startGame(config));
-    setScreen('game');
+    setView('game');
   };
 
   const replay = () => {
-    if (!lastConfig || !meta) { setScreen('play'); return; }
+    if (!lastConfig) { setView(null); setTab('play'); return; }
     // A ranked rematch is against whatever rank the last result left.
     const rank = lastConfig.kind === 'ranked' ? ranks[lastConfig.size as 9 | 13 | 19].rank ?? lastConfig.aiRank : lastConfig.aiRank;
     begin({ ...lastConfig, aiRank: rank });
   };
 
+  const openGame = (game: SavedGame) => {
+    setMeta(game.meta);
+    saveSession(game.meta);
+    setLastConfig({ kind: game.meta.kind, size: game.meta.size, aiRank: game.meta.aiRank, humanColor: game.meta.humanColor, handicap: 0, komi: 6.5 });
+    if (game.result) {
+      loadSgfToEnd(game.sgf);
+      setView('review');
+    } else {
+      resumeGame(game.meta, game.sgf);
+      setView('game');
+    }
+  };
+
+  const addProblem = (node: GameNode) => {
+    const live = useGameStore.getState();
+    const analysis = live.currentNode === node ? live.analysisData ?? node.analysis : node.analysis;
+    const next = node.children[0]?.move ?? null;
+    const problem = createProblem({
+      board: node.gameState.board,
+      toPlay: node.gameState.currentPlayer,
+      moves: analysis?.moves ?? [],
+      played: next && next.x >= 0 ? { x: next.x, y: next.y } : null,
+      now: Date.now(),
+    });
+    if (!problem) { setToast('この局面はまだ解析中です'); return; }
+    if (problems.some((p) => sameProblem(p, problem))) { setToast('この局面はもう問題集にあります'); return; }
+    updateProblems([problem, ...problems]);
+    setToast('問題集に追加しました');
+  };
+
+  const playFromHere = (node: GameNode) => {
+    const rank = meta?.aiRank ?? '5k';
+    const next = startFromPosition(node, rank);
+    setMeta(next);
+    setLastConfig(null);
+    setView('game');
+    setToast(`この局面からAI ${rankLabel(rank)}と対局します`);
+  };
+
+  const currentSaved = meta ? games.find((g) => g.id === gameIdFor(meta)) : undefined;
+  const ongoing = meta && !currentSaved?.result && view !== 'game' ? meta : null;
+
+  let content: React.ReactNode;
+  if (view === 'game' && meta) {
+    content = (
+      <GameScreen
+        key={meta.startedAt}
+        meta={meta}
+        ranks={ranks}
+        confirmMoves={prefs.confirmMoves}
+        showScoreByDefault={prefs.showScoreInGame}
+        onRanksChange={updateRanks}
+        onMetaChange={setMeta}
+        onReplay={replay}
+        onReview={() => setView('review')}
+        onLeave={() => setView(null)}
+      />
+    );
+  } else if (view === 'review') {
+    content = (
+      <ReviewScreen
+        key={meta?.startedAt ?? 0}
+        title={meta ? `${meta.size}路 · AI ${rankLabel(meta.aiRank)}` : '検討'}
+        geminiApiKey={prefs.geminiApiKey}
+        geminiModel={prefs.geminiModel}
+        onBack={() => setView(null)}
+        onAddProblem={addProblem}
+        onPlayFromHere={playFromHere}
+        onOpenSettings={() => { setView(null); setTab('settings'); }}
+      />
+    );
+  } else if (tab === 'play') {
+    content = <PlayScreen ranks={ranks} onRanksChange={updateRanks} onStart={begin} ongoing={ongoing} onResume={() => setView('game')} />;
+  } else if (tab === 'games') {
+    content = (
+      <GamesScreen
+        games={games}
+        onOpen={openGame}
+        onDelete={(id) => setGames((list) => { const next = removeGame(list, id); storeSavedGames(next); return next; })}
+      />
+    );
+  } else if (tab === 'problems') {
+    content = (
+      <ProblemsScreen
+        problems={problems}
+        onAttempt={(id, correct) => updateProblems(recordAttempt(problems, id, correct))}
+        onDelete={(id) => updateProblems(problems.filter((p) => p.id !== id))}
+      />
+    );
+  } else {
+    content = <SettingsScreen prefs={prefs} onChange={updatePrefs} />;
+  }
+
   return (
     <div className="sensei-app">
-      <nav className="sensei-nav" aria-label="メインメニュー">
-        <span className="sensei-logo">碁トレ</span>
-        <button type="button" className={screen === 'play' ? 'is-active' : ''} onClick={() => setScreen('play')}>AIと対局</button>
-        {meta && (
-          <button type="button" className={screen === 'game' ? 'is-active' : ''} onClick={() => setScreen('game')}>対局</button>
-        )}
-        {meta && (
-          <button type="button" className={screen === 'review' ? 'is-active' : ''} onClick={() => setScreen('review')}>検討</button>
-        )}
-        <button type="button" className="sensei-nav-detail" onClick={() => setUiMode('classic')}>詳細モード</button>
-      </nav>
-      <main className="sensei-main">
-        {screen === 'play' && <PlayScreen ranks={ranks} onRanksChange={updateRanks} onStart={begin} />}
-        {screen === 'game' && meta && (
-          <GameScreen
-            key={meta.startedAt}
-            meta={meta}
-            ranks={ranks}
-            onRanksChange={updateRanks}
-            onMetaChange={setMeta}
-            onReplay={replay}
-            onReview={() => setScreen('review')}
-          />
-        )}
-        {screen === 'review' && <ReviewScreen key={meta?.startedAt ?? 0} onPlayAgain={() => setScreen('play')} />}
-      </main>
+      <div className="sensei-shell">
+        <nav className="sensei-tabbar" aria-label="メインメニュー">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className={!view && tab === t.id ? 'is-active' : ''}
+              aria-current={!view && tab === t.id ? 'page' : undefined}
+              onClick={() => { setView(null); setTab(t.id); }}
+            >
+              {t.icon}
+              <span>{t.label}</span>
+              {t.id === 'play' && ongoing && <span className="sensei-dot" aria-label="対局中" />}
+            </button>
+          ))}
+        </nav>
+        <main className="sensei-main">{content}</main>
+      </div>
+      {toast && <Toast message={toast} onDone={() => setToast(null)} />}
     </div>
   );
 };

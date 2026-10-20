@@ -3,7 +3,9 @@
  * against the human-like bot and remembering what kind of game it is.
  */
 import { useGameStore } from '../store/gameStore';
-import type { BoardSize, Player } from '../types';
+import type { BoardSize, GameNode, Player } from '../types';
+import { parseSgf } from '../utils/sgf';
+import { sgfForPath } from './sgfPath';
 import { humanProfileFor, isRank, rankLabel, type Rank } from './rankLadder';
 import { readLocalStorage, removeLocalStorage, writeLocalStorage } from '../utils/storage';
 
@@ -87,5 +89,53 @@ export function startGame(config: GameConfig): SessionMeta {
     rankRecorded: false,
   };
   saveSession(meta);
+  return meta;
+}
+
+/** Put the bot back on for a game already in the store, after a reload or a fresh start from a position. */
+function resumeBot(meta: SessionMeta): void {
+  const store = useGameStore.getState();
+  if (store.isTeachMode) store.toggleTeachMode();
+  if (store.isContinuousAnalysis) store.toggleContinuousAnalysis(true);
+  if (useGameStore.getState().isAnalysisMode) useGameStore.getState().toggleAnalysisMode();
+  const aiColor: Player = meta.humanColor === 'black' ? 'white' : 'black';
+  store.updateSettings({ aiStrategy: 'human', humanSlProfile: humanProfileFor(meta.aiRank) });
+  useGameStore.setState({ isAiPlaying: true, aiColor });
+  if (useGameStore.getState().currentPlayer === aiColor) useGameStore.getState().scheduleAiMove(300);
+}
+
+/** Load an SGF into the store and stand on its last move. */
+export function loadSgfToEnd(sgf: string): void {
+  const store = useGameStore.getState();
+  useGameStore.setState({ isAiPlaying: false, aiColor: null });
+  store.loadGame(parseSgf(sgf));
+  useGameStore.getState().navigateEnd();
+}
+
+export function resumeGame(meta: SessionMeta, sgf: string): void {
+  loadSgfToEnd(sgf);
+  saveSession(meta);
+  resumeBot(meta);
+}
+
+/** A free game against the bot from the position at `node`, playing the side to move. */
+export function startFromPosition(node: GameNode, aiRank: Rank): SessionMeta {
+  const humanColor = node.gameState.currentPlayer;
+  const sgf = sgfForPath(node);
+  loadSgfToEnd(sgf);
+  const store = useGameStore.getState();
+  const aiName = `AI ${rankLabel(aiRank)}`;
+  store.setRootProperty('PB', humanColor === 'black' ? 'あなた' : aiName);
+  store.setRootProperty('PW', humanColor === 'white' ? 'あなた' : aiName);
+  const meta: SessionMeta = {
+    kind: 'free',
+    size: node.gameState.board.length as BoardSize,
+    aiRank,
+    humanColor,
+    startedAt: Date.now(),
+    rankRecorded: false,
+  };
+  saveSession(meta);
+  resumeBot(meta);
   return meta;
 }
