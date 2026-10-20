@@ -3,6 +3,8 @@ export const KATAGO_RECOMMENDED_MODEL_URL =
   'https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-b18c384nbt-s9996604416-d4316597426.bin.gz';
 export const KATAGO_RECOMMENDED_MODEL_UPLOADED = '2024-05-26';
 export const KATAGO_RECOMMENDED_MODEL_SIZE = '~96 MB';
+// Served from this site for the same reason as the human net: no CORS upstream.
+export const KATAGO_RECOMMENDED_MODEL_PATH = `models/${KATAGO_RECOMMENDED_MODEL_NAME}.bin.gz`;
 
 export const KATAGO_SMALL_MODEL_PATH = 'models/katago-small.bin.gz';
 export const KATAGO_SMALL_MODEL_NAME = 'g170-b6c96-s175395328-d26788732';

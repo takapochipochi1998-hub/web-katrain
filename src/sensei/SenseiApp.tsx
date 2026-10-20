@@ -1,4 +1,7 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { isSmallKataGoModel, KATAGO_RECOMMENDED_MODEL_PATH } from '../engine/katago/modelDefaults';
+import { useGameStore } from '../store/gameStore';
+import { publicUrl } from '../utils/publicUrl';
 import { GameScreen } from './GameScreen';
 import { PlayScreen } from './PlayScreen';
 import { loadRankBook, saveRankBook, type RankBook } from './rankLadder';
@@ -13,6 +16,14 @@ export const SenseiApp: React.FC = () => {
   const [meta, setMeta] = useState<SessionMeta | null>(() => loadSession());
   const [lastConfig, setLastConfig] = useState<GameConfig | null>(null);
   const [screen, setScreen] = useState<Screen>('play');
+
+  // Review is the point of this mode, and the bundled test net is too weak for it.
+  useEffect(() => {
+    const { settings, updateSettings } = useGameStore.getState();
+    if (isSmallKataGoModel(settings.katagoModelUrl)) {
+      updateSettings({ katagoModelUrl: publicUrl(KATAGO_RECOMMENDED_MODEL_PATH) });
+    }
+  }, []);
 
   const updateRanks = useCallback((book: RankBook) => {
     setRanks(book);

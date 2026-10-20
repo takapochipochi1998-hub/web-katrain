@@ -11,7 +11,7 @@ import {
     KATAGO_RECOMMENDED_MODEL_NAME,
     KATAGO_RECOMMENDED_MODEL_SIZE,
     KATAGO_RECOMMENDED_MODEL_UPLOADED,
-    KATAGO_RECOMMENDED_MODEL_URL,
+    KATAGO_RECOMMENDED_MODEL_PATH,
     KATAGO_SMALL_MODEL_PATH,
 } from '../engine/katago/modelDefaults';
 import { KATAGO_HUMAN_PROFILES } from '../engine/katago/searchParams';
@@ -86,7 +86,7 @@ const OFFICIAL_MODELS: Array<{
     {
         label: 'Strong Browser (b18)',
         name: KATAGO_RECOMMENDED_MODEL_NAME,
-        url: KATAGO_RECOMMENDED_MODEL_URL,
+        url: publicUrl(KATAGO_RECOMMENDED_MODEL_PATH),
         badge: 'Optional',
         uploaded: KATAGO_RECOMMENDED_MODEL_UPLOADED,
         size: KATAGO_RECOMMENDED_MODEL_SIZE,
@@ -2334,7 +2334,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, focusMode
                                             <button
                                                 type="button"
                                                 className={pillButtonClass}
-                                                onClick={() => updateSettings({ katagoModelUrl: KATAGO_RECOMMENDED_MODEL_URL })}
+                                                onClick={() => updateSettings({ katagoModelUrl: publicUrl(KATAGO_RECOMMENDED_MODEL_PATH) })}
                                                 title={`Stronger b18 browser weights (${KATAGO_RECOMMENDED_MODEL_SIZE})`}
                                             >
                                                 Strong b18 ({KATAGO_RECOMMENDED_MODEL_SIZE})
