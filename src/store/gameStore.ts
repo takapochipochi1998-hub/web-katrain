@@ -498,7 +498,7 @@ export function normalizeStoredSettings(
       'noteFontScale', 'tsumegoFrameMargin', 'setupPositionMove', 'setupPositionAdvantage',
       'timerMainTimeMinutes', 'timerByoLengthSeconds', 'timerByoPeriods', 'timerMinimalUseSeconds',
       'showLastNMistakes', 'mistakeThreshold', 'animPvTimeSeconds', 'animPvMoves',
-      'trainerLowVisits', 'katagoVisits', 'katagoFastVisits', 'katagoMaxTimeMs',
+      'trainerLowVisits', 'katagoVisits', 'katagoFastVisits', 'aiMoveVisits', 'katagoMaxTimeMs',
       'katagoBatchSize', 'katagoMaxChildren', 'katagoTopK', 'katagoWideRootNoise',
       'katagoRootPolicyTemperature', 'katagoAnalysisPvLen',
     ] as const satisfies ReadonlyArray<keyof GameSettings>;
@@ -1399,6 +1399,7 @@ const defaultSettings: GameSettings = {
   katagoBackend: 'webgpu',
   katagoVisits: DEFAULT_KATAGO_VISITS,
   katagoFastVisits: 25,
+  aiMoveVisits: 100,
   katagoMaxTimeMs: 8000,
   katagoBatchSize: 16,
   katagoMaxChildren: DEFAULT_BOARD_SIZE * DEFAULT_BOARD_SIZE,
@@ -4634,7 +4635,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           state.settings.aiStrategy === 'default'
             ? state.settings.katagoTopK
             : Math.max(state.settings.katagoTopK, 30);
-        const visits = clampAnalysisVisits(state.settings.katagoVisits);
+        const visits = clampAnalysisVisits(state.settings.aiMoveVisits);
         const maxTimeMs = Math.max(25, Math.min(state.settings.katagoMaxTimeMs, ENGINE_MAX_TIME_MS));
         const batchSize = state.settings.katagoBatchSize;
         const maxChildren = state.settings.katagoMaxChildren;

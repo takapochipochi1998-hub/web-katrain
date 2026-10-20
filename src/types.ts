@@ -226,6 +226,7 @@ export interface GameSettings {
   katagoBackend: KataGoBackendPreference;
   katagoVisits: number;
   katagoFastVisits: number; // KaTrain fast_visits (used for initial/quick analysis)
+  aiMoveVisits: number; // Search depth for the AI's own moves, kept apart from analysis depth
   katagoMaxTimeMs: number;
   katagoBatchSize: number;
   katagoMaxChildren: number;

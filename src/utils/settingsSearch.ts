@@ -123,6 +123,7 @@ export const SETTINGS_SEARCH_INDEX: readonly SettingsSearchEntry[] = [
   { id: 'settings-katago-backend', tab: 'ai', label: "Backend", keywords: ['webgpu', 'gpu', 'wasm', 'cpu', 'engine'] },
   { id: 'settings-katago-visits', tab: 'ai', label: "Visits" },
   { id: 'settings-katago-fast-review-depth', tab: 'ai', label: "Fast review depth" },
+  { id: 'settings-ai-move-visits', tab: 'ai', label: "AI move visits" },
   { id: 'settings-katago-max-time', tab: 'ai', label: "Max Time (ms)" },
   { id: 'settings-katago-batch-size', tab: 'ai', label: "Batch Size" },
   { id: 'settings-katago-max-children', tab: 'ai', label: "Max Children" },

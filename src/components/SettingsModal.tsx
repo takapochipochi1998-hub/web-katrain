@@ -2641,6 +2641,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, focusMode
                                             <p className={subtextClass}>How many positions the search reads per move while live analysis is on. More is stronger and slower; the presets in the Analysis panel set the same number.</p>
                                         </div>
                                         <div className="space-y-1">
+                                            <label htmlFor="settings-ai-move-visits" className="text-[var(--ui-text-muted)] block text-sm">AI move visits</label>
+                                            <DraftNumberInput
+                                                id="settings-ai-move-visits"
+                                                min={16}
+                                                max={ENGINE_MAX_VISITS}
+                                                value={settings.aiMoveVisits}
+                                                onChange={(e) => updateSettings({ aiMoveVisits: clampSettingsVisits(parseInt(e.target.value || '0', 10)) })}
+                                                className={inputClass}
+                                            />
+                                            <p className={subtextClass}>How many positions the AI reads before playing its own move. Kept apart from analysis so a game stays quick; strong bots play weaker with fewer.</p>
+                                        </div>
+                                        <div className="space-y-1">
                                             <label htmlFor="settings-katago-fast-review-depth" className="text-[var(--ui-text-muted)] block text-sm">Fast review depth</label>
                                             <DraftNumberInput
                                                 id="settings-katago-fast-review-depth"

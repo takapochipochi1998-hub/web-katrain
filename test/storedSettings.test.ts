@@ -121,7 +121,7 @@ describe('normalizeStoredSettings', () => {
      * analysis with no visits in it at all.
      */
     it.each([
-      'katagoBatchSize', 'katagoVisits', 'katagoFastVisits', 'katagoMaxChildren',
+      'katagoBatchSize', 'katagoVisits', 'katagoFastVisits', 'aiMoveVisits', 'katagoMaxChildren',
       'katagoTopK', 'katagoMaxTimeMs', 'katagoWideRootNoise', 'katagoRootPolicyTemperature',
       'katagoAnalysisPvLen', 'noteFontScale', 'tsumegoFrameMargin', 'setupPositionMove',
       'setupPositionAdvantage', 'timerMainTimeMinutes', 'timerByoLengthSeconds',
