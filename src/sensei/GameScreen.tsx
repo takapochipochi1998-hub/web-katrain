@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useGameStore } from '../store/gameStore';
 import type { GameNode, Player } from '../types';
 import { SenseiBoard } from './SenseiBoard';
-import { outcomeFor, resultFromScoreLead, resultLabel } from './gameResult';
+import { outcomeFor, parseResult, resultFromScoreLead, resultLabel } from './gameResult';
 import { rankLabel, recordResult, type RankBook, type RankedBoardSize } from './rankLadder';
 import { loseOnTime, saveSession, type SessionMeta } from './session';
 import { formatClock, hasClock, spendTime, viewClock } from './clock';
@@ -157,12 +157,44 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
     { color: 'black', name: meta.humanColor === 'black' ? 'あなた' : aiName, captures: capturedWhite },
     { color: 'white', name: meta.humanColor === 'white' ? 'あなた' : aiName, captures: capturedBlack },
   ];
-  const clockLabel = clockView
+  const flagged = parseResult(endState)?.margin === 'time';
+  const clockLabel = flagged
+    ? '時間切れ'
+    : clockView
     ? clockView.inByoyomi
       ? `秒読み ${formatClock(clockView.secondsLeft)}（残り${clockView.periodsLeft}回）`
       : `残り ${formatClock(clockView.secondsLeft)}`
     : null;
   const clockUrgent = !!clockView && clockRunning && (clockView.inByoyomi ? clockView.secondsLeft <= 10 : clockView.secondsLeft <= 30);
+
+  // The players and the result: beside the board on a wide screen, under it on a phone.
+  const info = (
+    <>
+      <div className="sensei-players">
+        {players.map((p) => {
+          const thinking = !ended && p.color === aiColor && (isAiThinking || currentPlayer === aiColor) && !counting;
+          return (
+            <div key={p.color} className={`sensei-player${!ended && currentPlayer === p.color ? ' is-turn' : ''}`}>
+              <span className={`sensei-stone sensei-stone-${p.color}`} aria-hidden />
+              <div className="min-w-0 flex-1">
+                <div className="sensei-player-name">{p.name}</div>
+                <div className="sensei-player-sub">アゲハマ {p.captures}</div>
+                {clockLabel && p.color === meta.humanColor && (
+                  <div className={`sensei-player-sub tabular-nums${clockUrgent ? ' sensei-clock-urgent' : ''}`}>{clockLabel}</div>
+                )}
+              </div>
+              {thinking && <span className="sensei-spinner" aria-label="AIが考えています" />}
+            </div>
+          );
+        })}
+      </div>
+      {(counting || ended) && (
+        <div className="sensei-status" aria-live="polite">
+          {ended ? resultLabel(endState) : <>地を数えています <span className="sensei-spinner" aria-hidden /></>}
+        </div>
+      )}
+    </>
+  );
 
   return (
     <>
@@ -183,29 +215,7 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
               </>
             )}
           </div>
-          <div className="sensei-players">
-            {players.map((p) => {
-              const thinking = !ended && p.color === aiColor && (isAiThinking || currentPlayer === aiColor) && !counting;
-              return (
-                <div key={p.color} className={`sensei-player${!ended && currentPlayer === p.color ? ' is-turn' : ''}`}>
-                  <span className={`sensei-stone sensei-stone-${p.color}`} aria-hidden />
-                  <div className="min-w-0 flex-1">
-                    <div className="sensei-player-name">{p.name}</div>
-                    <div className="sensei-player-sub">アゲハマ {p.captures}</div>
-                    {clockLabel && p.color === meta.humanColor && (
-                      <div className={`sensei-player-sub tabular-nums${clockUrgent ? ' sensei-clock-urgent' : ''}`}>{clockLabel}</div>
-                    )}
-                  </div>
-                  {thinking && <span className="sensei-spinner" aria-label="AIが考えています" />}
-                </div>
-              );
-            })}
-          </div>
-          {(counting || ended) && (
-            <div className="sensei-status" aria-live="polite">
-              {ended ? resultLabel(endState) : <>地を数えています <span className="sensei-spinner" aria-hidden /></>}
-            </div>
-          )}
+          {!narrow && info}
         </div>
         <div className="sensei-board-wrap">
           <SenseiBoard
@@ -218,6 +228,7 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
             onTap={tap}
           />
         </div>
+        {narrow && <div className="sensei-side sensei-gameinfo">{info}</div>}
       </div>
 
       {confirmResign && (

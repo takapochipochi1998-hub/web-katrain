@@ -308,3 +308,6 @@
 @media (min-width: 900px) {
   .sensei-gamebar { padding-top: 8px; order: 2; }
 }
+.sensei-gameinfo { gap: 8px; padding-top: 4px; }
+.sensei-gameinfo .sensei-player { padding: 8px 10px; }
+.sensei-gameinfo .sensei-status { min-height: 0; }
