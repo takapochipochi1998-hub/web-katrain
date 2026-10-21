@@ -280,7 +280,6 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
             ghost={liveGhost ? { x: liveGhost.x, y: liveGhost.y, player: meta.humanColor } : null}
             disabled={!humanToMove}
             dragPlayer={humanToMove ? meta.humanColor : null}
-            showCoords={!narrow}
             onTap={tap}
           />
         </div>

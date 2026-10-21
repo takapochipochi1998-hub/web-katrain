@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { isSmallKataGoModel, KATAGO_RECOMMENDED_MODEL_PATH } from '../engine/katago/modelDefaults';
 import { useGameStore } from '../store/gameStore';
 import type { GameNode } from '../types';
@@ -32,6 +32,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { log } from './log';
 import { setCloudConfig, warmUpCloud } from '../engine/katago/cloud';
 import { stoneSprites } from './stoneSprites';
+import { BoardPrefsContext } from './boardPrefs';
 
 type Tab = 'play' | 'games' | 'problems' | 'settings';
 type View = 'game' | 'review' | null;
@@ -210,6 +211,7 @@ export const SenseiApp: React.FC = () => {
     setToast(`この局面からAI ${rankLabel(rank)}と対局します`);
   };
 
+  const boardPrefs = useMemo(() => ({ showCoords: prefs.showCoords }), [prefs.showCoords]);
   const currentSaved = meta ? games.find((g) => g.id === gameIdFor(meta)) : undefined;
   const ongoing = meta && !currentSaved?.result && view !== 'game' ? meta : null;
 
@@ -276,6 +278,7 @@ export const SenseiApp: React.FC = () => {
   }
 
   return (
+    <BoardPrefsContext.Provider value={boardPrefs}>
     <div className={`sensei-app${view ? ' is-immersive' : ''}`}>
       <div className="sensei-shell">
         <nav className="sensei-tabbar" aria-label="メインメニュー">
@@ -299,5 +302,6 @@ export const SenseiApp: React.FC = () => {
       </div>
       {toast && <Toast message={toast} onDone={() => setToast(null)} />}
     </div>
+    </BoardPrefsContext.Provider>
   );
 };

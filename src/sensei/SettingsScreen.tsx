@@ -65,6 +65,13 @@ export const SettingsScreen: React.FC<Props> = ({ prefs, onChange }) => {
             <Switch checked={prefs.confirmMoves} onChange={(v) => set({ confirmMoves: v })} label="着手の確認" />
           </div>
           <div className="sensei-row">
+            <span>
+              座標を表示
+              <span className="sensei-muted block">盤の外側に数字と漢数字を出します</span>
+            </span>
+            <Switch checked={prefs.showCoords} onChange={(v) => set({ showCoords: v })} label="座標を表示" />
+          </div>
+          <div className="sensei-row">
             <span>持ち時間</span>
             <Segmented
               options={MAIN_TIMES}

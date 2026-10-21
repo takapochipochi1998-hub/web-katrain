@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import type { MoveVerdict } from './reviewModel';
 
 type Props = {
@@ -27,17 +27,27 @@ export const ScoreGraph: React.FC<Props> = ({ series, verdicts, currentMove, onS
   const points = series.map((lead, i) => (lead === null ? null : `${x(i)},${y(lead)}`)).filter(Boolean);
   const area = points.length > 1 ? `M0,${mid} L${points.join(' L')} L${x(series.length - 1)},${mid} Z` : '';
 
+  const lastPicked = useRef<number | null>(null);
+  const pick = (e: React.PointerEvent<SVGSVGElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const n = Math.max(0, Math.min(last, Math.round(((e.clientX - rect.left) / rect.width) * last)));
+    if (n === lastPicked.current && e.type === 'pointermove') return;
+    lastPicked.current = n;
+    onSelect(n);
+  };
+
   return (
     <svg
       viewBox={`0 0 ${W} ${H}`}
       className="sensei-graph"
       role="img"
       aria-label="形勢グラフ"
-      // A click, not pointerup: on a phone a tap that drifts becomes a scroll and never lifts here.
-      onClick={(e) => {
-        const rect = e.currentTarget.getBoundingClientRect();
-        onSelect(Math.max(0, Math.min(last, Math.round(((e.clientX - rect.left) / rect.width) * last))));
+      // Press and slide: the move follows the finger. The graph takes the touch, so it does not scroll the page.
+      onPointerDown={(e) => {
+        e.currentTarget.setPointerCapture(e.pointerId);
+        pick(e);
       }}
+      onPointerMove={(e) => { if (e.currentTarget.hasPointerCapture(e.pointerId)) pick(e); }}
     >
       <rect width={W} height={H} fill="var(--s-surface-2)" />
       <rect width={W} height={mid} fill="var(--s-surface)" />

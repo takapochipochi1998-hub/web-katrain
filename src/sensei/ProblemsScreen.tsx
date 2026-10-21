@@ -3,7 +3,6 @@ import { SenseiBoard, type BoardMarker } from './SenseiBoard';
 import { candidateLabel, candidateShade } from './reviewModel';
 import { isCorrect, nextProblem, type Problem } from './problems';
 import { Dialog, Header } from './ui';
-import { useNarrow } from './useNarrow';
 
 type Props = {
   problems: readonly Problem[];
@@ -15,7 +14,6 @@ type Attempt = { problemId: string; x: number; y: number; correct: boolean };
 
 /** "次の一手" practice: positions saved from reviews, answered by tapping the board. */
 export const ProblemsScreen: React.FC<Props> = ({ problems, onAttempt, onDelete }) => {
-  const narrow = useNarrow();
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [attempt, setAttempt] = useState<Attempt | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -78,7 +76,6 @@ export const ProblemsScreen: React.FC<Props> = ({ problems, onAttempt, onDelete 
             markers={markers}
             disabled={!!answered}
             dragPlayer={answered ? null : problem.toPlay}
-            showCoords={!narrow}
             onTap={(x, y) => {
               if (problem.board[y]?.[x]) return;
               const correct = isCorrect(problem, x, y);

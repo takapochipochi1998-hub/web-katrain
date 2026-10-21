@@ -20,7 +20,6 @@ import {
 import { resultLabel } from './gameResult';
 import { explainMove, factsForMove } from './explain';
 import { Header, NavMenu, Segmented, Switch, type NavTarget } from './ui';
-import { useNarrow } from './useNarrow';
 import { RankPicker } from './RankPicker';
 import { readLocalStorage, writeLocalStorage } from '../utils/storage';
 
@@ -85,8 +84,6 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
   const analysisData = useGameStore((s) => s.analysisData);
   const treeVersion = useGameStore((s) => s.treeVersion);
   const katagoVisits = useGameStore((s) => s.settings.katagoVisits);
-
-  const narrow = useNarrow();
   const [showTerritory, setShowTerritory] = useState(() => readLocalStorage(TERRITORY_KEY) === '1');
   const toggleTerritory = (on: boolean) => { setShowTerritory(on); writeLocalStorage(TERRITORY_KEY, on ? '1' : '0'); };
   const [explanation, setExplanation] = useState<{ nodeId: string; text: string } | null>(null);
@@ -223,16 +220,16 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
       />
       <div className="sensei-game">
         <div className="sensei-board-wrap">
-          <SenseiBoard board={board} lastMove={lastMove} markers={markers} territory={territory} dragPlayer={currentNode.gameState.currentPlayer} showCoords={!narrow} onTap={tryMove} />
+          <SenseiBoard board={board} lastMove={lastMove} markers={markers} territory={territory} dragPlayer={currentNode.gameState.currentPlayer} onTap={tryMove} />
         </div>
         <div className="sensei-side">
           <div className="sensei-nav-buttons">
-            <button type="button" aria-label="最初へ" onClick={() => goTo(line[0])}>«</button>
+            <button type="button" aria-label="最初へ" onClick={() => goTo(line[0])}><EdgeIcon end="start" /></button>
             <button type="button" className="is-mistake" disabled={!prevMistake} onClick={() => goTo(prevMistake && line[prevMistake.moveNumber - 1])}>前の悪手</button>
             <button type="button" aria-label="1手戻る" onClick={() => useGameStore.getState().navigateBack()}>‹</button>
             <button type="button" aria-label="1手進む" onClick={() => goTo(onMain ? line[anchorIndex + 1] : currentNode.children[0])}>›</button>
             <button type="button" className="is-mistake" disabled={!nextMistake} onClick={() => goTo(nextMistake && line[nextMistake.moveNumber - 1])}>次の悪手</button>
-            <button type="button" aria-label="最後へ" onClick={() => goTo(line[line.length - 1])}>»</button>
+            <button type="button" aria-label="最後へ" onClick={() => goTo(line[line.length - 1])}><EdgeIcon end="end" /></button>
           </div>
 
           <div className="sensei-row">
@@ -345,3 +342,11 @@ const Verdict: React.FC<{ verdict: MoveVerdict }> = ({ verdict }) => {
     </>
   );
 };
+
+/** |◀◀ and ▶▶|: a bar shows the move goes all the way to the first or last move. */
+const EdgeIcon: React.FC<{ end: 'start' | 'end' }> = ({ end }) => (
+  <svg width="18" height="14" viewBox="0 0 18 14" aria-hidden style={end === 'end' ? undefined : { transform: 'scaleX(-1)' }}>
+    <path d="M1 1.5 L7 7 L1 12.5 Z M7.5 1.5 L13.5 7 L7.5 12.5 Z" fill="currentColor" />
+    <rect x="14.5" y="1.5" width="2" height="11" rx="0.6" fill="currentColor" />
+  </svg>
+);

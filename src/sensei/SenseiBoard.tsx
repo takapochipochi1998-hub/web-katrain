@@ -1,5 +1,6 @@
 import React, { memo, useId, useState } from 'react';
 import { stoneSprites } from './stoneSprites';
+import { useBoardPrefs } from './boardPrefs';
 import type { BoardState, Player } from '../types';
 import { kanjiRow } from './coords';
 
@@ -28,6 +29,7 @@ type Props = {
    */
   dragPlayer?: Player | null;
   /** Coordinates along the edges; phones leave them off to give the board room. */
+  /** Defaults to the 設定 choice. */
   showCoords?: boolean;
   onTap?: (x: number, y: number) => void;
   disabled?: boolean;
@@ -46,7 +48,9 @@ const R = CELL * 0.48;
 const LINE = '#4b3518';
 
 /** Board in Japanese coordinates: 1… across the top, 一… down the side. */
-export const SenseiBoard: React.FC<Props> = ({ board, lastMove, markers = [], ghost, dragPlayer, showCoords = true, onTap, disabled, territory }) => {
+export const SenseiBoard: React.FC<Props> = ({ board, lastMove, markers = [], ghost, dragPlayer, showCoords: showCoordsProp, onTap, disabled, territory }) => {
+  const prefs = useBoardPrefs();
+  const showCoords = showCoordsProp ?? prefs.showCoords;
   const uid = useId().replace(/:/g, '');
   const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
   const size = board.length;
