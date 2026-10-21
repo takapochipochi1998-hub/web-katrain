@@ -193,8 +193,8 @@
 .sensei-nav-buttons .is-mistake { color: var(--s-bad); }
 .sensei-trial { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 16px; background: var(--s-accent-soft); flex-wrap: wrap; }
 .sensei-trial strong { flex: 1; font-size: 14px; }
-.sensei-verdict { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.sensei-verdict .sensei-loss { font-weight: 700; font-size: 21px; line-height: 1.3; margin-left: auto; letter-spacing: -0.02em; }
+.sensei-verdict { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; min-height: 44px; white-space: nowrap; }
+.sensei-verdict .sensei-loss { font-weight: 700; font-size: 19px; line-height: 1.3; margin-left: auto; letter-spacing: -0.02em; }
 /* Override only the image reset in TSX's inline background shorthand.
    Its quality colour remains underneath the tint; text stays AA-readable. */
 .sensei-badge { color: var(--s-text); background-image: linear-gradient(var(--s-nav), var(--s-nav)) !important; border: 1px solid var(--s-border); border-radius: 8px; padding: 3px 9px; font-size: 12px; font-weight: 700; }
@@ -334,3 +334,8 @@
 .sensei-mini-black { fill: #1d1d1f; }
 .sensei-mini-white { fill: #f7f5ef; stroke: rgb(0 0 0 / 0.35); stroke-width: 0.06; }
 .sensei-stone-inline { display: inline-block; width: 12px; height: 12px; margin-left: 6px; vertical-align: -1px; }
+/* The candidate grid keeps the height of three rows, so the page below never jumps. */
+.sensei-candidates { min-height: 144px; align-content: start; }
+.sensei-verdict-back { flex: none; }
+.sensei-verdict .sensei-loss + .sensei-verdict-back { margin-left: 4px; }
+.sensei-verdict > .sensei-verdict-back:nth-child(3) { margin-left: auto; }

@@ -143,6 +143,20 @@ export const SenseiBoard: React.FC<Props> = ({ board, lastMove, markers = [], gh
           </g>
         )}
 
+        {territory && (
+          <g pointerEvents="none">
+            {/* Each side's expected area, whole cells tinted by how sure the engine is. */}
+            {territory.flatMap((row, y) => row.map((v, x) => {
+              const sure = Math.abs(v);
+              if (sure < 0.15) return null;
+              const black = v > 0;
+              return (
+                <rect key={`t${x}-${y}`} x={at(x) - CELL / 2} y={at(y) - CELL / 2} width={CELL} height={CELL}
+                  fill={black ? '#000' : '#fff'} opacity={black ? 0.12 + sure * 0.45 : 0.25 + sure * 0.6} />
+              );
+            }))}
+          </g>
+        )}
         {board.flatMap((row, y) => row.map((s, x) => s && (
           <Stone key={`s${x}-${y}`} uid={uid} cx={at(x)} cy={at(y)} player={s} variant={(x * 7 + y * 3) % 6} />
         )))}
@@ -153,24 +167,15 @@ export const SenseiBoard: React.FC<Props> = ({ board, lastMove, markers = [], gh
         )}
         {territory && (
           <g pointerEvents="none">
+            {/* Dead stones: a square of the owner's colour on the stone. */}
             {territory.flatMap((row, y) => row.map((v, x) => {
-              const owner = v > 0 ? 'black' : 'white';
               const stone = board[y]?.[x];
-              // Empty points and stones expected to die: a square of the owner's colour.
-              if (Math.abs(v) < 0.2 || stone === owner) return null;
-              const side = CELL * (stone ? 0.34 : 0.3) * Math.min(1, 0.45 + Math.abs(v) * 0.55);
+              const owner = v > 0 ? 'black' : 'white';
+              if (!stone || stone === owner || Math.abs(v) < 0.4) return null;
+              const side = CELL * 0.36;
               return (
-                <rect
-                  key={`t${x}-${y}`}
-                  x={at(x) - side / 2}
-                  y={at(y) - side / 2}
-                  width={side}
-                  height={side}
-                  fill={owner === 'black' ? '#141414' : '#f7f6f2'}
-                  stroke={owner === 'black' ? 'none' : '#555'}
-                  strokeWidth={0.6}
-                  opacity={0.35 + Math.abs(v) * 0.55}
-                />
+                <rect key={`d${x}-${y}`} x={at(x) - side / 2} y={at(y) - side / 2} width={side} height={side}
+                  fill={owner === 'black' ? '#141414' : '#f7f6f2'} stroke={owner === 'black' ? '#f7f6f2' : '#141414'} strokeWidth={0.8} />
               );
             }))}
           </g>

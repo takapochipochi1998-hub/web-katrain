@@ -9,13 +9,15 @@ import { classifyMove, type MoveQuality } from './moveQuality';
 
 export function mainLine(root: GameNode): GameNode[] {
   const line: GameNode[] = [root];
-  for (let node = root.children[0]; node; node = node.children[0]) line.push(node);
+  // The game ends where its result was recorded; anything tried after that is a try-out.
+  for (let node = root.children[0]; node && !line[line.length - 1]!.endState; node = node.children[0]) line.push(node);
   return line;
 }
 
+/** Whether a node lies on the game as played: first children all the way, not past the end. */
 export function isOnMainLine(node: GameNode): boolean {
   for (let n: GameNode = node; n.parent; n = n.parent) {
-    if (n.parent.children[0] !== n) return false;
+    if (n.parent.children[0] !== n || n.parent.endState) return false;
   }
   return true;
 }
@@ -24,7 +26,7 @@ export function isOnMainLine(node: GameNode): boolean {
 export function branchPoint(node: GameNode): GameNode {
   let candidate = node;
   for (let n: GameNode = node; n.parent; n = n.parent) {
-    if (n.parent.children[0] !== n) candidate = n.parent;
+    if (n.parent.children[0] !== n || n.parent.endState) candidate = n.parent;
   }
   return candidate;
 }
@@ -72,17 +74,29 @@ export function scoreSeries(line: readonly GameNode[]): Array<number | null> {
 /** Candidate letters A, B, C… for the engine's top moves. */
 export const candidateLabel = (index: number): string => String(index + 1);
 
-/** Points lost at which a candidate is drawn at its palest. */
-const PALEST_AT = 5;
+/**
+ * One colour for every candidate, deeper the better: `t` runs from 0 (the best,
+ * solid) to 1 (the last one shown, palest).
+ */
+export function candidateShade(t: number): { fill: string; text: string } {
+  const k = 1 - Math.min(1, Math.max(0, t));
+  // Mixed toward a very pale blue rather than made see-through, so grid lines stay hidden.
+  const mix = (deep: number, pale: number) => Math.round(pale + (deep - pale) * k);
+  return { fill: `rgb(${mix(30, 238)}, ${mix(76, 242)}, ${mix(196, 251)})`, text: k >= 0.45 ? '#ffffff' : '#1d3f94' };
+}
 
 /**
- * One colour for every candidate, deeper the better: the best move is solid,
- * and the more a move gives away the paler it gets.
+ * Each candidate's place on the shade scale: by rank, so lower places get paler,
+ * but scaled by the loss, so a move that gives away almost nothing stays nearly
+ * as deep as the best. Equal losses share a shade.
  */
-export function candidateShade(pointsLost: number): { fill: string; text: string; alpha: number } {
-  const t = Math.min(1, Math.max(0, pointsLost) / PALEST_AT);
-  const alpha = Math.round((1 - 0.78 * t) * 100) / 100;
-  // Mixed toward a pale blue rather than made see-through, so grid lines stay hidden behind the number.
-  const mix = (deep: number, pale: number) => Math.round(pale + (deep - pale) * alpha);
-  return { fill: `rgb(${mix(36, 226)}, ${mix(84, 233)}, ${mix(200, 248)})`, text: alpha >= 0.5 ? '#ffffff' : '#173a8f', alpha };
+export function shadeSteps(losses: readonly number[]): number[] {
+  const n = losses.length;
+  if (n <= 1) return losses.map(() => 0);
+  return losses.map((loss, i) => {
+    const first = losses.findIndex((l) => Math.abs(l - loss) < 0.05);
+    const rank = (first === -1 ? i : first) / (n - 1);
+    return rank * Math.min(1, 0.25 + Math.max(0, loss) / 3);
+  });
 }
+

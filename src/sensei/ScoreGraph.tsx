@@ -33,9 +33,10 @@ export const ScoreGraph: React.FC<Props> = ({ series, verdicts, currentMove, onS
       className="sensei-graph"
       role="img"
       aria-label="形勢グラフ"
-      onPointerUp={(e) => {
+      // A click, not pointerup: on a phone a tap that drifts becomes a scroll and never lifts here.
+      onClick={(e) => {
         const rect = e.currentTarget.getBoundingClientRect();
-        onSelect(Math.round(((e.clientX - rect.left) / rect.width) * last));
+        onSelect(Math.max(0, Math.min(last, Math.round(((e.clientX - rect.left) / rect.width) * last))));
       }}
     >
       <rect width={W} height={H} fill="var(--s-surface-2)" />

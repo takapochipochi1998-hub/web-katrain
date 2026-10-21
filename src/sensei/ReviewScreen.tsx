@@ -8,6 +8,7 @@ import {
   branchPoint,
   candidateLabel,
   candidateShade,
+  shadeSteps,
   isMistake,
   isOnMainLine,
   judgeLine,
@@ -17,7 +18,6 @@ import {
   type MoveVerdict,
 } from './reviewModel';
 import { resultLabel } from './gameResult';
-import { pointLabel } from './coords';
 import { explainMove, factsForMove } from './explain';
 import { Header, NavMenu, Segmented, Switch, type NavTarget } from './ui';
 import { useNarrow } from './useNarrow';
@@ -25,7 +25,7 @@ import { RankPicker } from './RankPicker';
 import { readLocalStorage, writeLocalStorage } from '../utils/storage';
 
 const TERRITORY_KEY = 'web-katrain:sensei-show-territory:v1';
-import { humanProfileFor, rankLabel, type Rank } from './rankLadder';
+import { humanProfileFor, type Rank } from './rankLadder';
 
 const DEPTHS = [
   { value: 200, label: '速い' },
@@ -41,9 +41,6 @@ const QUALITY_COLOR: Record<MoveQuality, string> = {
   mistake: '#d97b20',
   blunder: '#d2333f',
 };
-
-/** Visits to wait for before the auto-reply trusts the engine's first choice. */
-const AUTO_REPLY_MIN_VISITS = 64;
 
 const isPass = (m: { x: number } | null | undefined) => !!m && m.x < 0;
 
@@ -61,9 +58,6 @@ function refreshAnalysis(): void {
   void useGameStore.getState().runAnalysis({ ifIdle: true });
 }
 
-/** Try-out moves the player made, and those the engine has already answered. */
-const playerTryouts = new WeakSet<GameNode>();
-const answeredTryouts = new WeakSet<GameNode>();
 let lastReviewedRoot: GameNode | null = null;
 
 type Props = {
@@ -91,10 +85,8 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
   const analysisData = useGameStore((s) => s.analysisData);
   const treeVersion = useGameStore((s) => s.treeVersion);
   const katagoVisits = useGameStore((s) => s.settings.katagoVisits);
-  const humanSlEnabled = useGameStore((s) => s.settings.humanSlEnabled);
 
   const narrow = useNarrow();
-  const [autoReply, setAutoReply] = useState(true);
   const [showTerritory, setShowTerritory] = useState(() => readLocalStorage(TERRITORY_KEY) === '1');
   const toggleTerritory = (on: boolean) => { setShowTerritory(on); writeLocalStorage(TERRITORY_KEY, on ? '1' : '0'); };
   const [explanation, setExplanation] = useState<{ nodeId: string; text: string } | null>(null);
@@ -106,8 +98,11 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
     const store = useGameStore.getState();
     useGameStore.setState({ isAiPlaying: false, aiColor: null });
     if (!store.isAnalysisMode) store.toggleAnalysisMode();
-    // Coming back to the same game keeps the place; a different game starts at move 0.
-    if (lastReviewedRoot !== store.rootNode) store.navigateStart();
+    // Coming back to the same game keeps the place; a different game opens where it ended.
+    if (lastReviewedRoot !== store.rootNode) {
+      const line = mainLine(store.rootNode);
+      store.jumpToNode(line[line.length - 1]!);
+    }
     lastReviewedRoot = store.rootNode;
   }, []);
 
@@ -146,30 +141,18 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
   const result = line[line.length - 1]?.endState ?? rootNode.properties?.RE?.[0] ?? null;
 
   // The move being judged: the next game move on the main line, otherwise the
-  // player's latest try-out (the move before the engine's auto reply, if any).
-  const autoReplied = !onMain && !!currentNode.parent && answeredTryouts.has(currentNode.parent) && !playerTryouts.has(currentNode);
-  const judgedNode = autoReplied ? currentNode.parent! : currentNode;
+  // latest try-out move.
   const judged: MoveVerdict | null = onMain
     ? verdicts.find((v) => v.moveNumber === anchorIndex + 1) ?? null
-    : judgeMove(judgedNode, judgedNode.gameState.moveHistory.length);
-  const replyMove = autoReplied ? currentNode.move : null;
+    : judgeMove(currentNode, currentNode.gameState.moveHistory.length);
   // The node whose move "AIに聞く" explains.
-  const explainNode = onMain ? line[anchorIndex + 1] : judgedNode;
-
-  // How likely a player of the chosen rank was to play the judged move.
-  const judgedMove = onMain ? line[anchorIndex + 1]?.move : judgedNode.move;
-  const positionBefore = onMain ? anchor : judgedNode.parent;
-  const humanPolicy = (positionBefore === currentNode ? analysisData?.humanPolicy : undefined) ?? positionBefore?.analysis?.humanPolicy;
-  const size = board.length;
-  const humanProb = humanSlEnabled && humanPolicy && judgedMove && judgedMove.x >= 0
-    ? humanPolicy[judgedMove.y * size + judgedMove.x]
-    : undefined;
+  const explainNode = onMain ? line[anchorIndex + 1] : currentNode;
+  const judgedMove = onMain ? line[anchorIndex + 1]?.move : currentNode.move;
 
   // analysisData is the live (still deepening) analysis of the current node.
   const analysis = analysisData ?? currentNode.analysis ?? null;
   // Moves the search barely looked at have unreliable values; leave them out.
   const rootVisits = analysis?.rootVisits ?? 0;
-  // The engine's choice first, then the rest from the smallest loss up.
   const lossOf = (m: { relativePointsLost?: number; pointsLost: number }) => Math.max(0, m.relativePointsLost ?? m.pointsLost);
   // Losses are against the engine's best move, a pass included; numbered from the smallest loss up.
   const allMoves = analysis?.moves ?? [];
@@ -177,30 +160,13 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
   const candidates = allMoves
     .filter((m, i) => m.x >= 0 && (i === 0 || m.visits >= Math.max(2, rootVisits * 0.01)))
     .sort((a, b) => lossOf(a) - lossOf(b) || (b === allMoves[0] ? 1 : 0) - (a === allMoves[0] ? 1 : 0))
-    .slice(0, 10);
+    // In a try-out, the reply is the player's to choose: the opponent's best three.
+    .slice(0, onMain ? 10 : 3);
   const isBest = (m: (typeof candidates)[number]) => m === allMoves[0];
+  const steps = shadeSteps(candidates.map(lossOf));
 
-  // Try-out auto reply: answer each of the player's try-out moves with the engine's best.
-  useEffect(() => {
-    if (!autoReply || onMain || !playerTryouts.has(currentNode) || answeredTryouts.has(currentNode)) return;
-    const best = currentNode.analysis?.moves?.[0];
-    const visits = currentNode.analysis?.rootVisits ?? 0;
-    if (!best || best.x < 0 || visits < Math.min(AUTO_REPLY_MIN_VISITS, katagoVisits)) return;
-    answeredTryouts.add(currentNode);
-    useGameStore.getState().playMove(best.x, best.y);
-  }, [autoReply, onMain, currentNode, treeVersion, analysisData, katagoVisits]);
-
-  const tryMove = (x: number, y: number) => {
-    const before = useGameStore.getState().currentNode;
-    useGameStore.getState().playMove(x, y);
-    const after = useGameStore.getState().currentNode;
-    // Replaying the game's own move just steps forward; anything else is a try-out,
-    // including one tried before (its earlier reply is then reused).
-    if (after !== before && !isOnMainLine(after)) {
-      playerTryouts.add(after);
-      answeredTryouts.delete(after);
-    }
-  };
+  // Replaying the game's own move just steps forward; anything else is a try-out.
+  const tryMove = (x: number, y: number) => useGameStore.getState().playMove(x, y);
 
   const goTo = (node: GameNode | undefined) => { if (node) useGameStore.getState().jumpToNode(node); };
   const mistakes = verdicts.filter((v) => isMistake(v) && (!humanColor || v.player === humanColor));
@@ -224,7 +190,7 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
   };
 
   const markers: BoardMarker[] = candidates.map((m, i) => {
-    const shade = candidateShade(lossOf(m));
+    const shade = candidateShade(steps[i]!);
     return { x: m.x, y: m.y, label: candidateLabel(i), fill: shade.fill, textColor: shade.text };
   });
   // The move actually played next, ringed in its verdict's colour.
@@ -272,39 +238,27 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
           <div className="sensei-row">
             <span>
               地を表示
-              {territory && (
-                <span className="sensei-muted block">
-                  目安: 黒 {blackArea}目 · 白 {whiteArea}目
-                  {typeof lead === 'number' ? ` · 形勢 ${lead >= 0 ? '黒' : '白'}+${Math.abs(lead).toFixed(1)}目（コミ込み）` : ''}
-                </span>
-              )}
+              {/* Always one line here, so turning it on does not move what is below. */}
+              <span className="sensei-muted block">
+                {territory
+                  ? <>目安: 黒 {blackArea}目 · 白 {whiteArea}目{typeof lead === 'number' ? ` · 形勢 ${lead >= 0 ? '黒' : '白'}+${Math.abs(lead).toFixed(1)}目` : ''}</>
+                  : 'AIが見込む陣地を盤に表示'}
+              </span>
             </span>
             <Switch checked={showTerritory} onChange={toggleTerritory} label="地を表示" />
           </div>
 
-          {!onMain && (
-            <div className="sensei-trial">
-              <strong>試し打ち中</strong>
-              <span className="text-sm">AIが応手</span>
-              <Switch checked={autoReply} onChange={setAutoReply} label="AIが自動で応手" />
-              <button type="button" className="sensei-primary" onClick={() => goTo(anchor)}>実戦に戻る</button>
-            </div>
-          )}
-
           <div className="sensei-card sensei-stack">
             <div className="sensei-verdict">
-              <span className="sensei-muted">{onMain ? '次の一手' : 'あなたの試し打ち'}</span>
+              <span className="sensei-muted">{onMain ? '次の一手' : '試し打ち'}</span>
               {judged ? <Verdict verdict={judged} /> : <span className="sensei-muted">終局</span>}
+              {!onMain && <button type="button" className="sensei-primary sensei-compact sensei-verdict-back" onClick={() => goTo(anchor)}>実戦に戻る</button>}
             </div>
-            {replyMove && replyMove.x >= 0 && <div className="sensei-muted">AIの応手: {pointLabel(replyMove.x, replyMove.y)}</div>}
-            {typeof humanProb === 'number' && humanProb >= 0 && (
-              <div className="sensei-muted">{rankLabel(playerRank)}の人がこの手を打つ確率: {(humanProb * 100).toFixed(1)}%</div>
-            )}
-            {candidates.length > 0 && <p className="sensei-muted text-xs">数字は良い手の順で、色が濃いほど良い手。{played ? '輪で囲んだのが実際に打った手です。' : ''}{bestIsPass ? 'AIの最善はパスです。' : ''}</p>}
-            {candidates.length > 0 && (
-              <div className="sensei-candidates">
+            {/* Fixed height, however many candidates there are, so taps below never shift. */}
+            <div className="sensei-candidates">
+                {bestIsPass && candidates.length === 0 && <span className="sensei-muted">AIの最善はパスです</span>}
                 {candidates.map((m, i) => {
-                  const shade = candidateShade(lossOf(m));
+                  const shade = candidateShade(steps[i]!);
                   return (
                     <button key={`${m.x}-${m.y}`} type="button" className={isBest(m) ? 'is-best' : ''} onClick={() => tryMove(m.x, m.y)}>
                       <b style={{ background: shade.fill, color: shade.text }}>{candidateLabel(i)}</b>
@@ -312,8 +266,7 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
                     </button>
                   );
                 })}
-              </div>
-            )}
+            </div>
           </div>
 
           <ScoreGraph series={series} verdicts={humanColor ? verdicts.filter((v) => v.player === humanColor) : verdicts} currentMove={Math.max(0, anchorIndex)} onSelect={(n) => goTo(line[Math.min(n, line.length - 1)])} />
@@ -345,7 +298,7 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
 
           <div className="sensei-card sensei-stack">
             <div className="flex flex-col gap-2">
-              <span>打ち手の級位</span>
+              <span>この局面から対局するときのAIの級位</span>
               <RankPicker value={playerRank} onChange={onPlayerRankChange} />
             </div>
             <div className="sensei-row">

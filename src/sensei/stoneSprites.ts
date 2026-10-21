@@ -1,12 +1,11 @@
 /**
  * Stone pictures, painted once on a canvas and reused as images: a slate black
- * with a fine grain and soft sheen, and clamshell whites whose curved growth
- * bands differ from stone to stone. Gradients alone looked like plastic, and
+ * with a fine grain and soft sheen, and a plain matte white. Gradients alone looked like plastic, and
  * per-stone SVG filters are too slow for a full 19x19 board.
  */
 
 const SIZE = 160; // px; drawn larger than any cell on a phone, scaled down.
-export const WHITE_VARIANTS = 6;
+export const WHITE_VARIANTS = 1;
 export const BLACK_VARIANTS = 2;
 
 export type StoneSprites = { black: string[]; white: string[] };
@@ -94,12 +93,11 @@ function paintBlack(seed: number): string | null {
   return c.toDataURL('image/png');
 }
 
-/** Clamshell white: off-white with curved growth bands of uneven width and spacing. */
-function paintWhite(seed: number): string | null {
+/** Plain white: a soft off-white body with the same sheen as the black. */
+function paintWhite(): string | null {
   const made = canvas();
   if (!made) return null;
   const [c, ctx] = made;
-  const rand = rng(seed * 7919 + 3);
   ctx.save();
   clipCircle(ctx);
   const base = ctx.createRadialGradient(C - R * 0.25, C - R * 0.3, R * 0.05, C, C, R * 1.02);
@@ -109,24 +107,6 @@ function paintWhite(seed: number): string | null {
   base.addColorStop(1, '#c9c9c5');
   ctx.fillStyle = base;
   ctx.fillRect(0, 0, SIZE, SIZE);
-
-  // Bands run across the stone at a slant, each a gentle arc of a large circle.
-  ctx.translate(C, C);
-  ctx.rotate((8 + rand() * 26) * (Math.PI / 180));
-  const bend = R * (2.6 + rand() * 1.6);
-  ctx.filter = 'blur(0.7px)';
-  let off = -R * (0.95 + rand() * 0.1);
-  while (off < R) {
-    const width = R * (0.015 + rand() * rand() * 0.11);
-    ctx.strokeStyle = `rgba(150,150,156,${0.08 + rand() * 0.14})`;
-    ctx.lineWidth = width;
-    ctx.beginPath();
-    ctx.arc(0, off + bend, bend, Math.PI * 1.25, Math.PI * 1.75);
-    ctx.stroke();
-    off += R * (0.11 + rand() * 0.2);
-  }
-  ctx.filter = 'none';
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
 
   glow(ctx, C - R * 0.38, C - R * 0.45, R * 0.5, '255,255,255', 0.85, 0.65, -0.6);
   glow(ctx, C + R * 0.3, C + R * 0.68, R * 0.32, '255,255,255', 0.55, 0.45, -0.5);
@@ -149,7 +129,7 @@ export function stoneSprites(): StoneSprites | null {
   if (cached !== undefined) return cached;
   try {
     const black = Array.from({ length: BLACK_VARIANTS }, (_, i) => paintBlack(i + 1));
-    const white = Array.from({ length: WHITE_VARIANTS }, (_, i) => paintWhite(i + 1));
+    const white = Array.from({ length: WHITE_VARIANTS }, () => paintWhite());
     cached = black.every(Boolean) && white.every(Boolean) ? { black: black as string[], white: white as string[] } : null;
     // Decode every picture now, not when the first stone of its kind is placed.
     if (cached && typeof Image !== 'undefined') {
