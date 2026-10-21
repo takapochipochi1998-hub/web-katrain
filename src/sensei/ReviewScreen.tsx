@@ -17,8 +17,8 @@ import {
   scoreSeries,
   type MoveVerdict,
 } from './reviewModel';
-import { explainMove, factsForMove } from './explain';
 import { Segmented, Switch } from './ui';
+import { takeReviewStart } from './reviewStart';
 import { readLocalStorage, writeLocalStorage } from '../utils/storage';
 
 const TERRITORY_KEY = 'web-katrain:sensei-show-territory:v1';
@@ -55,23 +55,24 @@ function refreshAnalysis(): void {
   void useGameStore.getState().runAnalysis({ ifIdle: true });
 }
 
+/** Mistake positions already offered to the problem set. */
+const autoAdded = new WeakSet<GameNode>();
 let lastReviewedRoot: GameNode | null = null;
 
 type Props = {
   /** The player's rank, for "how often would a player of my rank play this?" */
   /** The player's level (from the ranked rating): how strictly moves are judged. */
   playerRank: Rank;
-  geminiApiKey: string;
-  geminiModel: string;
   onAddProblem: (node: GameNode) => void;
+  /** The player's own mistakes become 次の一手 problems once their position is analysed. */
+  onAutoProblem: (node: GameNode) => void;
   onPlayFromHere: (node: GameNode) => void;
-  onOpenSettings: () => void;
   /** The player's colour in a game against the bot; mistakes are then only theirs. */
   humanColor?: Player | null;
 };
 
 /** Reviewing a finished game: mistakes, candidates, the score graph and try-outs. */
-export const ReviewScreen: React.FC<Props> = ({ playerRank, geminiApiKey, geminiModel, onAddProblem, onPlayFromHere, onOpenSettings, humanColor }) => {
+export const ReviewScreen: React.FC<Props> = ({ playerRank, onAddProblem, onAutoProblem, onPlayFromHere, humanColor }) => {
   const rootNode = useGameStore((s) => s.rootNode);
   const currentNode = useGameStore((s) => s.currentNode);
   const board = useGameStore((s) => s.board);
@@ -83,20 +84,18 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, geminiApiKey, gemini
   const katagoVisits = useGameStore((s) => s.settings.katagoVisits);
   const [showTerritory, setShowTerritory] = useState(() => readLocalStorage(TERRITORY_KEY) === '1');
   const toggleTerritory = (on: boolean) => { setShowTerritory(on); writeLocalStorage(TERRITORY_KEY, on ? '1' : '0'); };
-  const [explanation, setExplanation] = useState<{ nodeId: string; text: string } | null>(null);
-  const [explaining, setExplaining] = useState<string | null>(null);
-  const [explainError, setExplainError] = useState<string | null>(null);
 
   // Set the store up for reviewing once: no bot, live analysis on, a quick pass over the game.
   useEffect(() => {
     const store = useGameStore.getState();
     useGameStore.setState({ isAiPlaying: false, aiColor: null });
     if (!store.isAnalysisMode) store.toggleAnalysisMode();
-    // Coming back to the same game keeps the place; a different game opens where it ended.
-    if (lastReviewedRoot !== store.rootNode) {
-      const line = mainLine(store.rootNode);
-      store.jumpToNode(line[line.length - 1]!);
-    }
+    // "検討に戻る" opens at the move it left from; coming back to the same game keeps
+    // the place; a different game opens where it ended.
+    const startAt = takeReviewStart();
+    const line = mainLine(store.rootNode);
+    if (startAt !== null) store.jumpToNode(line[Math.min(startAt, line.length - 1)]!);
+    else if (lastReviewedRoot !== store.rootNode) store.jumpToNode(line[line.length - 1]!);
     lastReviewedRoot = store.rootNode;
   }, []);
 
@@ -131,8 +130,6 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, geminiApiKey, gemini
   const judged: MoveVerdict | null = onMain
     ? verdicts.find((v) => v.moveNumber === anchorIndex + 1) ?? null
     : judgeMove(currentNode, currentNode.gameState.moveHistory.length, judgeScale);
-  // The node whose move "AIに聞く" explains.
-  const explainNode = onMain ? line[anchorIndex + 1] : currentNode;
   const judgedMove = onMain ? line[anchorIndex + 1]?.move : currentNode.move;
 
   // analysisData is the live (still deepening) analysis of the current node.
@@ -146,8 +143,8 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, geminiApiKey, gemini
   const candidates = allMoves
     .filter((m, i) => m.x >= 0 && (i === 0 || m.visits >= Math.max(2, rootVisits * 0.01)))
     .sort((a, b) => lossOf(a) - lossOf(b) || (b === allMoves[0] ? 1 : 0) - (a === allMoves[0] ? 1 : 0))
-    // Three at most: enough to compare, few enough to read at a glance.
-    .slice(0, 3);
+    // Three on the game line; five in a variation, where the next move is the player's to choose.
+    .slice(0, onMain ? 3 : 5);
   const isBest = (m: (typeof candidates)[number]) => m === allMoves[0];
   const steps = shadeSteps(candidates.map(lossOf));
 
@@ -156,24 +153,19 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, geminiApiKey, gemini
 
   const goTo = (node: GameNode | undefined) => { if (node) useGameStore.getState().jumpToNode(node); };
   const mistakes = verdicts.filter((v) => isMistake(v) && (!humanColor || v.player === humanColor));
+  // Like AI Sensei: each of the player's own mistakes becomes a problem, as soon as the
+  // position before it has the engine's candidates (it has been looked at in depth).
+  useEffect(() => {
+    if (!humanColor) return;
+    for (const v of mistakes) {
+      const before = line[v.moveNumber - 1];
+      if (!before || autoAdded.has(before) || !before.analysis?.moves?.some((m) => m.x >= 0)) continue;
+      autoAdded.add(before);
+      onAutoProblem(before);
+    }
+  }, [mistakes, line, humanColor, onAutoProblem]);
   const nextMistake = mistakes.find((v) => v.moveNumber > anchorIndex + 1);
   const prevMistake = [...mistakes].reverse().find((v) => v.moveNumber < anchorIndex + 1);
-
-  const ask = async () => {
-    if (!explainNode) return;
-    const facts = factsForMove(explainNode);
-    setExplainError(null);
-    if (!facts) { setExplainError('この手はまだ解析が終わっていません。少し待ってからもう一度押してください。'); return; }
-    setExplaining(explainNode.id);
-    try {
-      const text = await explainMove({ apiKey: geminiApiKey, model: geminiModel, facts });
-      setExplanation({ nodeId: explainNode.id, text });
-    } catch (e) {
-      setExplainError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setExplaining(null);
-    }
-  };
 
   const markers: BoardMarker[] = candidates.map((m, i) => {
     const shade = candidateShade(steps[i]!);
@@ -188,7 +180,13 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, geminiApiKey, gemini
     if (hit) hit.ring = ring;
     else markers.push({ x: played.x, y: played.y, ring, ...(player ? { played: player } : {}) });
   }
-  const lastMove = currentNode.move && !isPass(currentNode.move) ? currentNode.move : null;
+  // In a variation the tried stones carry their order (変化図), so the last-move mark is not needed.
+  const variation: GameNode[] = [];
+  for (let n: GameNode = currentNode; n !== anchor && n.parent; n = n.parent) variation.unshift(n);
+  variation.forEach((n, i) => {
+    if (n.move && n.move.x >= 0 && board[n.move.y]?.[n.move.x]) markers.push({ x: n.move.x, y: n.move.y, label: String(i + 1) });
+  });
+  const lastMove = onMain && currentNode.move && !isPass(currentNode.move) ? currentNode.move : null;
   // Expected territory: points each side is likely to own, counting stones expected to die.
   const territory = showTerritory ? analysis?.territory ?? null : null;
   let blackArea = 0;
@@ -199,7 +197,6 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, geminiApiKey, gemini
     if (v < -0.5 && stone !== 'white') whiteArea++;
   }));
   const lead = analysis?.rootScoreLead;
-  const shownExplanation = explanation && explainNode && explanation.nodeId === explainNode.id ? explanation.text : null;
 
   return (
     <>
@@ -208,7 +205,6 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, geminiApiKey, gemini
           <SenseiBoard board={board} lastMove={lastMove} markers={markers} territory={territory} dragPlayer={currentNode.gameState.currentPlayer} onTap={tryMove} />
         </div>
         <div className="sensei-side">
-          <ScoreGraph series={series} verdicts={humanColor ? verdicts.filter((v) => v.player === humanColor) : verdicts} currentMove={Math.max(0, anchorIndex)} onSelect={(n) => goTo(line[Math.min(n, line.length - 1)])} />
           <div className="sensei-nav-buttons">
             <button type="button" aria-label="最初へ" onClick={() => goTo(line[0])}><EdgeIcon end="start" /></button>
             <button type="button" className="is-mistake" disabled={!prevMistake} onClick={() => goTo(prevMistake && line[prevMistake.moveNumber - 1])}>前の悪手</button>
@@ -217,28 +213,40 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, geminiApiKey, gemini
             <button type="button" className="is-mistake" disabled={!nextMistake} onClick={() => goTo(nextMistake && line[nextMistake.moveNumber - 1])}>次の悪手</button>
             <button type="button" aria-label="最後へ" onClick={() => goTo(line[line.length - 1])}><EdgeIcon end="end" /></button>
           </div>
-
+          <ScoreGraph series={series} verdicts={humanColor ? verdicts.filter((v) => v.player === humanColor) : verdicts} currentMove={Math.max(0, anchorIndex)} onSelect={(n) => goTo(line[Math.min(n, line.length - 1)])} />
 
           <div className="sensei-card sensei-stack">
             <div className="sensei-verdict">
-              <span className="sensei-muted">{onMain ? '次の一手' : '試し打ち'}</span>
+              <span className="sensei-muted">{onMain ? '次の一手' : `変化図（${variation.length}手）`}</span>
               {judged ? <Verdict verdict={judged} /> : <span className="sensei-muted">終局</span>}
-              {!onMain && <button type="button" className="sensei-primary sensei-compact sensei-verdict-back" onClick={() => goTo(anchor)}>実戦に戻る</button>}
             </div>
-            {/* Fixed height (one row of three), so taps below never shift. */}
-            <div className="sensei-candidates">
+            {/* Fixed height (one row), so taps below never shift. */}
+            <div className={`sensei-candidates${onMain ? '' : ' is-five'}`}>
                 {bestIsPass && candidates.length === 0 && <span className="sensei-muted">AIの最善はパスです</span>}
                 {candidates.map((m, i) => {
                   const shade = candidateShade(steps[i]!);
                   return (
                     <button key={`${m.x}-${m.y}`} type="button" className={isBest(m) ? 'is-best' : ''} onClick={() => tryMove(m.x, m.y)}>
                       <b style={{ background: shade.fill, color: shade.text }}>{candidateLabel(i)}</b>
-                      {isBest(m) ? '最善' : `−${lossOf(m).toFixed(1)}目`}
+                      {isBest(m) ? '最善' : `−${lossOf(m).toFixed(1)}${onMain ? '目' : ''}`}
                     </button>
                   );
                 })}
             </div>
           </div>
+
+          {/* The same row holds the variation's own controls, so nothing below moves. */}
+          {onMain ? (
+            <div className="sensei-toolbar">
+              <button type="button" className="sensei-secondary" disabled={candidates.length === 0} onClick={() => onAddProblem(currentNode)}>問題集に追加</button>
+              <button type="button" className="sensei-secondary" onClick={() => onPlayFromHere(currentNode)}>この局面から対局再開</button>
+            </div>
+          ) : (
+            <div className="sensei-toolbar">
+              <button type="button" className="sensei-secondary" onClick={() => useGameStore.getState().navigateBack()}>1手戻す</button>
+              <button type="button" className="sensei-primary" onClick={() => goTo(anchor)}>実戦に戻る</button>
+            </div>
+          )}
 
           {isGameAnalysisRunning && <p className="sensei-muted">対局を解析中… {done} / {total}</p>}
           {mistakes.length > 0 && (
@@ -258,27 +266,6 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, geminiApiKey, gemini
               ))}
             </div>
           )}
-
-          <div className="sensei-toolbar">
-            <button type="button" className="sensei-secondary" disabled={candidates.length === 0} onClick={() => onAddProblem(currentNode)}>問題集に追加</button>
-            <button type="button" className="sensei-secondary" onClick={() => onPlayFromHere(currentNode)}>この局面からAIと対局</button>
-          </div>
-
-          <div className="sensei-card sensei-stack">
-            <div className="sensei-row">
-              <strong>AIに聞く</strong>
-              <button type="button" className="sensei-secondary" disabled={!explainNode || !!explaining} onClick={() => void ask()}>
-                {explaining ? <>考え中 <span className="sensei-spinner" aria-hidden /></> : 'この手を解説'}
-              </button>
-            </div>
-            {shownExplanation && <p className="sensei-explain">{shownExplanation}</p>}
-            {explainError && (
-              <p className="sensei-muted">
-                {explainError}
-                {!geminiApiKey && <> <button type="button" className="sensei-ghost" onClick={onOpenSettings}>設定を開く</button></>}
-              </p>
-            )}
-          </div>
 
           {/* Options last: the most used things sit nearest the board. */}
           <div className="sensei-card sensei-stack">

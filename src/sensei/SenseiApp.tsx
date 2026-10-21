@@ -13,7 +13,8 @@ import { SettingsScreen } from './SettingsScreen';
 import { createProblem, loadProblems, recordAttempt, sameProblem, storeProblems, type Problem } from './problems';
 import { loadPreferences, storePreferences, type Preferences } from './preferences';
 import { loadRankBook, rankForRating, rankLabel, ratingOf, saveRankBook, type Rank, type RankBook } from './rankLadder';
-import { mainLine } from './reviewModel';
+import { branchPoint, mainLine } from './reviewModel';
+import { openReviewAt } from './reviewStart';
 import { gameIdFor, loadSavedGames, removeGame, storeSavedGames, upsertGame, type SavedGame } from './savedGames';
 import {
   loadSession,
@@ -230,7 +231,21 @@ export const SenseiApp: React.FC = () => {
 
   const navigate = (target: Tab) => { setView(null); setTab(target); };
 
-  const addProblem = (node: GameNode) => {
+  /** Back from a resumed game to the reviewed game, at the move it started from. */
+  const backToReview = () => {
+    const from = meta?.from;
+    const game = from && games.find((g) => g.id === from.gameId);
+    if (!from || !game) { setToast('元の棋譜が見つかりませんでした'); return; }
+    openReviewAt(from.move);
+    setMeta(game.meta);
+    saveSession(game.meta);
+    loadSgfToEnd(game.sgf);
+    setLastConfig(null);
+    setView('review');
+  };
+
+  /** Add the position before `node`'s game move; `quiet` for the automatic adds from mistakes. */
+  const addProblem = (node: GameNode, quiet = false) => {
     const live = useGameStore.getState();
     const analysis = live.currentNode === node ? live.analysisData ?? node.analysis : node.analysis;
     const next = node.children[0]?.move ?? null;
@@ -241,20 +256,33 @@ export const SenseiApp: React.FC = () => {
       played: next && next.x >= 0 ? { x: next.x, y: next.y } : null,
       now: Date.now(),
     });
-    if (!problem) { setToast('この局面はまだ解析中です'); return; }
+    if (!problem) { if (!quiet) setToast('この局面はまだ解析中です'); return; }
+    if (quiet) {
+      setProblems((list) => {
+        if (list.some((p) => sameProblem(p, problem))) return list;
+        const next = [problem, ...list];
+        storeProblems(next);
+        return next;
+      });
+      return;
+    }
     if (problems.some((p) => sameProblem(p, problem))) { setToast('この局面はもう問題集にあります'); return; }
     updateProblems([problem, ...problems]);
     setToast('問題集に追加しました');
   };
 
   const playFromHere = (node: GameNode) => {
-    // Play the position against a bot of the player's own strength.
+    // Play the position against a bot of the player's own strength, as a practice
+    // game, remembering where it came from for "検討に戻る".
     const rank = reviewRank;
-    const next = startFromPosition(node, rank);
+    let move = 0;
+    for (let n = branchPoint(node); n.parent; n = n.parent) move++;
+    const from = meta && games.some((g) => g.id === gameIdFor(meta)) ? { gameId: gameIdFor(meta), move } : undefined;
+    const next = startFromPosition(node, rank, from);
     setMeta(next);
     setLastConfig(null);
     setView('game');
-    setToast(`この局面からAI ${rankLabel(rank)}と対局します`);
+    setToast(`この局面から対局を再開します（相手: AI ${rankLabel(rank)}）`);
   };
 
   const boardPrefs = useMemo(() => ({ showCoords: prefs.showCoords }), [prefs.showCoords]);
@@ -273,6 +301,7 @@ export const SenseiApp: React.FC = () => {
         onMetaChange={setMeta}
         onReplay={replay}
         onReview={() => { log('open-review', { from: 'game' }); setView('review'); }}
+        onBackToReview={meta.from ? backToReview : undefined}
       />
     );
   } else if (view === 'review') {
@@ -280,11 +309,9 @@ export const SenseiApp: React.FC = () => {
       <ReviewScreen
         key={meta?.startedAt ?? 0}
         playerRank={reviewRank}
-        geminiApiKey={prefs.geminiApiKey}
-        geminiModel={prefs.geminiModel}
         onAddProblem={addProblem}
+        onAutoProblem={(node) => addProblem(node, true)}
         onPlayFromHere={playFromHere}
-        onOpenSettings={() => { setView(null); setTab('settings'); }}
         humanColor={meta?.humanColor ?? null}
       />
     );

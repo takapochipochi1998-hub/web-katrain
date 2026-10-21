@@ -169,7 +169,7 @@
 
 /* Board colours and markers remain owned by the SVG. */
 .sensei-board-wrap { min-width: 0; padding: 12px max(8px, env(safe-area-inset-right)) 12px max(8px, env(safe-area-inset-left)); display: flex; justify-content: center; }
-.sensei-board { display: block; width: 100%; max-width: min(100%, max(280px, calc(100dvh - 330px))); min-width: 0; height: auto; border-radius: 14px; box-shadow: var(--s-board-shadow); touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.sensei-board { display: block; width: 100%; max-width: min(100%, max(280px, calc(100dvh - 330px))); min-width: 0; height: auto; border-radius: 3px; box-shadow: var(--s-board-shadow); touch-action: manipulation; user-select: none; -webkit-user-select: none; }
 .sensei-game { display: flex; flex-direction: column; }
 .sensei-side { min-width: 0; padding: 4px max(16px, env(safe-area-inset-right)) 24px max(16px, env(safe-area-inset-left)); display: flex; flex-direction: column; gap: 12px; }
 .sensei-side .sensei-card { padding: 16px; }
@@ -347,3 +347,6 @@
 .sensei-size-pick { display: flex; } .sensei-size-pick .sensei-segmented { max-width: none; }
 /* No header above the review: keep the board clear of the phone's status bar. */
 .sensei-review { padding-top: max(8px, env(safe-area-inset-top)); }
+/* A variation's five replies in one row. */
+.sensei-candidates.is-five { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.sensei-candidates.is-five button { flex-direction: column; gap: 2px; padding: 4px 2px; font-size: 11px; }

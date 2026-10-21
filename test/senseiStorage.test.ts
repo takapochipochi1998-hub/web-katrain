@@ -24,12 +24,25 @@ describe('problems', () => {
     expect(sameProblem(p, { board: empty(9), toPlay: 'white' })).toBe(false);
   });
 
-  it('serves the least practised problem next and counts attempts', () => {
+  it('spaces reviews the Anki way: 1 day, 3 days, then by the ease; a miss returns in 10 minutes', () => {
+    const DAY = 86400000;
     const a = createProblem({ board: empty(9), toPlay: 'black', moves: [cand(4, 4, 0)], played: null, now: 1 })!;
     const b = createProblem({ board: empty(9), toPlay: 'white', moves: [cand(4, 4, 0)], played: null, now: 2 })!;
-    const after = recordAttempt([a, b], a.id, true);
-    expect(after[0]).toMatchObject({ attempts: 1, solved: 1 });
-    expect(nextProblem(after)!.id).toBe(b.id);
+    let after = recordAttempt([a, b], a.id, true, 0);
+    expect(after[0]).toMatchObject({ attempts: 1, solved: 1, interval: 1, dueAt: DAY });
+    expect(nextProblem(after, 100)!.id).toBe(b.id);
+    after = recordAttempt(after, a.id, true, DAY);
+    expect(after[0]).toMatchObject({ interval: 3, dueAt: 4 * DAY });
+    after = recordAttempt(after, a.id, false, 4 * DAY);
+    expect(after[0]).toMatchObject({ streak: 0, dueAt: 4 * DAY + 600000 });
+    expect(after[0]!.ease).toBeLessThan(2.5);
+  });
+
+  it('serves nothing when nothing is due, unless asked to work ahead', () => {
+    const a = recordAttempt([createProblem({ board: empty(9), toPlay: 'black', moves: [cand(4, 4, 0)], played: null, now: 1 })!], '', true)[0]!;
+    const done = recordAttempt([a], a.id, true, 0);
+    expect(nextProblem(done, 1000)).toBeNull();
+    expect(nextProblem(done, 1000, true)!.id).toBe(a.id);
   });
 });
 

@@ -23,6 +23,8 @@ export type SessionMeta = {
   /** The player's time limit for this game and what is left of it. */
   timeControl?: TimeControl;
   clock?: Clock;
+  /** Set when the game was resumed from a reviewed position: where to go back to. */
+  from?: { gameId: string; move: number };
 };
 
 export type GameConfig = {
@@ -84,6 +86,7 @@ export function loadSession(): SessionMeta | null {
       startedAt: typeof raw.startedAt === 'number' ? raw.startedAt : Date.now(),
       rankRecorded: raw.rankRecorded === true,
       ...parseClockFields(raw),
+      ...(raw.from && typeof raw.from.gameId === 'string' && typeof raw.from.move === 'number' ? { from: { gameId: raw.from.gameId, move: raw.from.move } } : {}),
     };
   } catch {
     return null;
@@ -154,6 +157,11 @@ export function loadSgfToEnd(sgf: string): void {
   useGameStore.setState({ isAiPlaying: false, aiColor: null });
   store.loadGame(parseSgf(sgf));
   useGameStore.getState().navigateEnd();
+  // SGF keeps the result only on the root (RE). Put it back on the last move, so
+  // the game line ends there and a try-out from the final position stays a try-out.
+  const { currentNode, rootNode } = useGameStore.getState();
+  const result = rootNode.properties?.RE?.[0];
+  if (result && !currentNode.endState && currentNode !== rootNode) currentNode.endState = result;
   claimStoreGame();
 }
 
@@ -164,7 +172,7 @@ export function resumeGame(meta: SessionMeta, sgf: string): void {
 }
 
 /** A free game against the bot from the position at `node`, playing the side to move. */
-export function startFromPosition(node: GameNode, aiRank: Rank): SessionMeta {
+export function startFromPosition(node: GameNode, aiRank: Rank, from?: SessionMeta['from']): SessionMeta {
   const humanColor = node.gameState.currentPlayer;
   const sgf = sgfForPath(node);
   loadSgfToEnd(sgf);
@@ -179,6 +187,7 @@ export function startFromPosition(node: GameNode, aiRank: Rank): SessionMeta {
     humanColor,
     startedAt: Date.now(),
     rankRecorded: false,
+    ...(from ? { from } : {}),
   };
   saveSession(meta);
   resumeBot(meta);

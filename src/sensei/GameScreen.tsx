@@ -41,10 +41,12 @@ type Props = {
   onMetaChange: (meta: SessionMeta) => void;
   onReplay: () => void;
   onReview: () => void;
+  /** Present for a game resumed from a reviewed position: back to that review. */
+  onBackToReview?: () => void;
 };
 
 /** Playing a game against the bot: the board, whose turn it is, pass and resign. */
-export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanksChange, onMetaChange, onReplay, onReview }) => {
+export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanksChange, onMetaChange, onReplay, onReview, onBackToReview }) => {
   const board = useGameStore((s) => s.board);
   const currentNode = useGameStore((s) => s.currentNode);
   const currentPlayer = useGameStore((s) => s.currentPlayer);
@@ -258,6 +260,7 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
       <div className="sensei-game">
         <div className="sensei-side sensei-gamebar">
           <div className="sensei-gamebar-row">
+            {onBackToReview && <button type="button" className="sensei-secondary sensei-compact" onClick={onBackToReview}>検討に戻る</button>}
             <div className="flex-1" />
             {countFailed ? (
               <button type="button" className="sensei-primary sensei-compact" onClick={onReview}>検討する</button>

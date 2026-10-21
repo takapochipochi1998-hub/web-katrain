@@ -3,7 +3,7 @@ import { clearLog, exportLog } from './log';
 import { runSpeedTest, type SpeedRow } from './speedTest';
 import type { SyncStatus } from './syncStatus';
 import { useGameStore } from '../store/gameStore';
-import { DEFAULT_GEMINI_MODEL, type Preferences } from './preferences';
+import type { Preferences } from './preferences';
 import { BYO_PERIODS } from './clock';
 import { Header, Segmented, Switch } from './ui';
 
@@ -26,8 +26,6 @@ type Props = { prefs: Preferences; onChange: (prefs: Preferences) => void; syncS
 export const SettingsScreen: React.FC<Props> = ({ prefs, onChange, syncStatus, onSyncNow }) => {
   const engineBackend = useGameStore((s) => s.engineBackend);
   const engineModelName = useGameStore((s) => s.engineModelName);
-  const [keyDraft, setKeyDraft] = useState(prefs.geminiApiKey);
-  const [modelDraft, setModelDraft] = useState(prefs.geminiModel);
   const set = (patch: Partial<Preferences>) => onChange({ ...prefs, ...patch });
   const [tokenDraft, setTokenDraft] = useState(prefs.cloudToken);
   const [speedRows, setSpeedRows] = useState<SpeedRow[] | null>(null);
@@ -93,36 +91,6 @@ export const SettingsScreen: React.FC<Props> = ({ prefs, onChange, syncStatus, o
               label="秒読み"
             />
           </div>
-        </div>
-
-        <div className="sensei-section-label">AIに聞く（Gemini）</div>
-        <div className="sensei-card sensei-stack">
-          <label className="flex flex-col gap-2">
-            <span>APIキー</span>
-            <input
-              className="sensei-input"
-              type="password"
-              autoComplete="off"
-              placeholder="Google AI Studio で発行したキー"
-              value={keyDraft}
-              onChange={(e) => setKeyDraft(e.target.value)}
-              onBlur={() => set({ geminiApiKey: keyDraft.trim() })}
-            />
-          </label>
-          <p className="sensei-muted">キーはこの端末の中だけに保存し、Googleへの問い合わせ以外には送りません。</p>
-          <label className="flex flex-col gap-2">
-            <span>モデル</span>
-            <input
-              className="sensei-input"
-              autoComplete="off"
-              autoCapitalize="off"
-              spellCheck={false}
-              value={modelDraft}
-              onChange={(e) => setModelDraft(e.target.value)}
-              onBlur={() => set({ geminiModel: modelDraft.trim() || DEFAULT_GEMINI_MODEL })}
-            />
-          </label>
-          <p className="sensei-muted">既定は {DEFAULT_GEMINI_MODEL}（速く、無料枠が多い）。動作を確かめたのはこのモデルだけです。</p>
         </div>
 
         <div className="sensei-section-label">クラウド解析（試験中）</div>

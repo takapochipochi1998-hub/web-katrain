@@ -17,7 +17,40 @@ export type Problem = {
   createdAt: number;
   attempts: number;
   solved: number;
+  /** Spaced repetition (Anki's SM-2, simplified). Absent on problems from before it: due now. */
+  dueAt?: number;
+  /** Days until the next review after the last right answer. */
+  interval?: number;
+  /** How fast the interval grows (Anki's ease, 1.3 to 3.0). */
+  ease?: number;
+  /** Right answers in a row. */
+  streak?: number;
 };
+
+const DAY = 24 * 60 * 60 * 1000;
+const RETRY_AFTER = 10 * 60 * 1000;
+const EASE_START = 2.5;
+const EASE_MIN = 1.3;
+const EASE_MAX = 3.0;
+
+/**
+ * The next review, the way Anki spaces them: a right answer waits 1 day, then
+ * 3, then grows by the ease each time; a wrong one comes back in 10 minutes
+ * and makes the problem's growth slower.
+ */
+export function schedule(problem: Problem, correct: boolean, now: number): Problem {
+  const ease = problem.ease ?? EASE_START;
+  const streak = problem.streak ?? 0;
+  const base = { ...problem, attempts: problem.attempts + 1, solved: problem.solved + (correct ? 1 : 0) };
+  if (!correct) {
+    return { ...base, streak: 0, interval: 0, ease: Math.max(EASE_MIN, ease - 0.2), dueAt: now + RETRY_AFTER };
+  }
+  const nextStreak = streak + 1;
+  const interval = nextStreak === 1 ? 1 : nextStreak === 2 ? 3 : Math.round((problem.interval ?? 3) * ease);
+  return { ...base, streak: nextStreak, interval, ease: Math.min(EASE_MAX, ease + 0.05), dueAt: now + interval * DAY };
+}
+
+export const isDue = (problem: Problem, now: number): boolean => (problem.dueAt ?? 0) <= now;
 
 /** A candidate within this many points of the best counts as a right answer. */
 export const ANSWER_TOLERANCE = 1;
@@ -63,14 +96,20 @@ export function sameProblem(a: Pick<Problem, 'board' | 'toPlay'>, b: Pick<Proble
   return a.toPlay === b.toPlay && JSON.stringify(a.board) === JSON.stringify(b.board);
 }
 
-/** Least practised first, then the ones missed most. */
-export function nextProblem(problems: readonly Problem[]): Problem | null {
-  if (!problems.length) return null;
-  return [...problems].sort((a, b) => a.attempts - b.attempts || (a.solved / Math.max(1, a.attempts)) - (b.solved / Math.max(1, b.attempts)) || a.createdAt - b.createdAt)[0]!;
+/** The problem due longest ago; with `ahead`, the one due soonest even if not due yet. */
+export function nextProblem(problems: readonly Problem[], now: number, ahead = false): Problem | null {
+  const pool = ahead ? problems : problems.filter((p) => isDue(p, now));
+  if (!pool.length) return null;
+  return [...pool].sort((a, b) => (a.dueAt ?? 0) - (b.dueAt ?? 0) || a.createdAt - b.createdAt)[0]!;
 }
 
-export function recordAttempt(problems: readonly Problem[], id: string, correct: boolean): Problem[] {
-  return problems.map((p) => (p.id === id ? { ...p, attempts: p.attempts + 1, solved: p.solved + (correct ? 1 : 0) } : p));
+/** When the next problem falls due, or null when there are none. */
+export function nextDueAt(problems: readonly Problem[]): number | null {
+  return problems.length ? Math.min(...problems.map((p) => p.dueAt ?? 0)) : null;
+}
+
+export function recordAttempt(problems: readonly Problem[], id: string, correct: boolean, now: number = Date.now()): Problem[] {
+  return problems.map((p) => (p.id === id ? schedule(p, correct, now) : p));
 }
 
 const STORAGE_KEY = 'web-katrain:sensei-problems:v1';
