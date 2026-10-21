@@ -3,6 +3,7 @@ import { outcomeFor, resultLabel } from './gameResult';
 import { rankLabel } from './rankLadder';
 import type { SavedGame } from './savedGames';
 import { Dialog, Header } from './ui';
+import { MiniBoard } from './MiniBoard';
 
 type Props = {
   games: readonly SavedGame[];
@@ -45,10 +46,11 @@ export const GamesScreen: React.FC<Props> = ({ games, onOpen, onImport, onDelete
                 return (
                   <li key={g.id} className="flex items-center">
                     <button type="button" className="sensei-list-item" onClick={() => onOpen(g)}>
-                      <span className={`sensei-stone sensei-stone-${g.meta.humanColor}`} aria-hidden />
+                      <MiniBoard sgf={g.sgf} />
                       <span className="sensei-list-main">
                         <span className="sensei-list-title">
                           {g.meta.size}路 · AI {rankLabel(g.meta.aiRank)}
+                          <span className={`sensei-stone sensei-stone-${g.meta.humanColor} sensei-stone-inline`} aria-label={g.meta.humanColor === 'black' ? 'あなたは黒' : 'あなたは白'} />
                         </span>
                         <span className="sensei-muted block">
                           {dateLabel(g.updatedAt)} · {g.moveCount}手 · {g.meta.kind === 'ranked' ? 'ランク戦' : '自由対局'}

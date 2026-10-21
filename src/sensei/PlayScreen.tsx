@@ -8,9 +8,9 @@ import { Header, Segmented } from './ui';
 type Tab = RankedBoardSize | 'free';
 
 const TAB_OPTIONS: ReadonlyArray<{ value: Tab; label: string }> = [
-  { value: 19, label: '19路ランク戦' },
-  { value: 13, label: '13路ランク戦' },
-  { value: 9, label: '9路ランク戦' },
+  { value: 19, label: '19路' },
+  { value: 13, label: '13路' },
+  { value: 9, label: '9路' },
   { value: 'free', label: '自由対局' },
 ];
 
