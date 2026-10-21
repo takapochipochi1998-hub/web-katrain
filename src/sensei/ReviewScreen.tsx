@@ -19,7 +19,6 @@ import {
 } from './reviewModel';
 import { explainMove, factsForMove } from './explain';
 import { Segmented, Switch } from './ui';
-import { RankPicker } from './RankPicker';
 import { readLocalStorage, writeLocalStorage } from '../utils/storage';
 
 const TERRITORY_KEY = 'web-katrain:sensei-show-territory:v1';
@@ -60,8 +59,8 @@ let lastReviewedRoot: GameNode | null = null;
 
 type Props = {
   /** The player's rank, for "how often would a player of my rank play this?" */
+  /** The player's level (from the ranked rating): how strictly moves are judged. */
   playerRank: Rank;
-  onPlayerRankChange: (rank: Rank) => void;
   geminiApiKey: string;
   geminiModel: string;
   onAddProblem: (node: GameNode) => void;
@@ -72,7 +71,7 @@ type Props = {
 };
 
 /** Reviewing a finished game: mistakes, candidates, the score graph and try-outs. */
-export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, geminiApiKey, geminiModel, onAddProblem, onPlayFromHere, onOpenSettings, humanColor }) => {
+export const ReviewScreen: React.FC<Props> = ({ playerRank, geminiApiKey, geminiModel, onAddProblem, onPlayFromHere, onOpenSettings, humanColor }) => {
   const rootNode = useGameStore((s) => s.rootNode);
   const currentNode = useGameStore((s) => s.currentNode);
   const board = useGameStore((s) => s.board);
@@ -185,8 +184,9 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
   if (played) {
     const ring = judged?.quality ? QUALITY_COLOR[judged.quality] : '#d2333f';
     const hit = markers.find((m) => m.x === played.x && m.y === played.y);
+    const player = judged?.player;
     if (hit) hit.ring = ring;
-    else markers.push({ x: played.x, y: played.y, ring });
+    else markers.push({ x: played.x, y: played.y, ring, ...(player ? { played: player } : {}) });
   }
   const lastMove = currentNode.move && !isPass(currentNode.move) ? currentNode.move : null;
   // Expected territory: points each side is likely to own, counting stones expected to die.
@@ -212,24 +212,12 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
           <div className="sensei-nav-buttons">
             <button type="button" aria-label="最初へ" onClick={() => goTo(line[0])}><EdgeIcon end="start" /></button>
             <button type="button" className="is-mistake" disabled={!prevMistake} onClick={() => goTo(prevMistake && line[prevMistake.moveNumber - 1])}>前の悪手</button>
-            <button type="button" aria-label="1手戻る" onClick={() => useGameStore.getState().navigateBack()}>‹</button>
-            <button type="button" aria-label="1手進む" onClick={() => goTo(onMain ? line[anchorIndex + 1] : currentNode.children[0])}>›</button>
+            <button type="button" aria-label="1手戻る" onClick={() => useGameStore.getState().navigateBack()}><StepIcon dir="back" /></button>
+            <button type="button" aria-label="1手進む" onClick={() => goTo(onMain ? line[anchorIndex + 1] : currentNode.children[0])}><StepIcon dir="forward" /></button>
             <button type="button" className="is-mistake" disabled={!nextMistake} onClick={() => goTo(nextMistake && line[nextMistake.moveNumber - 1])}>次の悪手</button>
             <button type="button" aria-label="最後へ" onClick={() => goTo(line[line.length - 1])}><EdgeIcon end="end" /></button>
           </div>
 
-          <div className="sensei-row">
-            <span>
-              地を表示
-              {/* Always one line here, so turning it on does not move what is below. */}
-              <span className="sensei-muted block">
-                {territory
-                  ? <>目安: 黒 {blackArea}目 · 白 {whiteArea}目{typeof lead === 'number' ? ` · 形勢 ${lead >= 0 ? '黒' : '白'}+${Math.abs(lead).toFixed(1)}目` : ''}</>
-                  : 'AIが見込む陣地を盤に表示'}
-              </span>
-            </span>
-            <Switch checked={showTerritory} onChange={toggleTerritory} label="地を表示" />
-          </div>
 
           <div className="sensei-card sensei-stack">
             <div className="sensei-verdict">
@@ -271,6 +259,11 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
             </div>
           )}
 
+          <div className="sensei-toolbar">
+            <button type="button" className="sensei-secondary" disabled={candidates.length === 0} onClick={() => onAddProblem(currentNode)}>問題集に追加</button>
+            <button type="button" className="sensei-secondary" onClick={() => onPlayFromHere(currentNode)}>この局面からAIと対局</button>
+          </div>
+
           <div className="sensei-card sensei-stack">
             <div className="sensei-row">
               <strong>AIに聞く</strong>
@@ -287,19 +280,20 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
             )}
           </div>
 
-          <div className="sensei-toolbar">
-            <button type="button" className="sensei-secondary" disabled={candidates.length === 0} onClick={() => onAddProblem(currentNode)}>問題集に追加</button>
-            <button type="button" className="sensei-secondary" onClick={() => onPlayFromHere(currentNode)}>この局面からAIと対局</button>
-          </div>
-
+          {/* Options last: the most used things sit nearest the board. */}
           <div className="sensei-card sensei-stack">
-            <div className="flex flex-col gap-2">
-              <span>
-                あなたの棋力
-                <span className="sensei-muted block">悪手の判定の厳しさと、「この局面からAIと対局」の相手の強さに使います</span>
+            <div className="sensei-row">
+            <span>
+              地を表示
+              {/* Always one line here, so turning it on does not move what is below. */}
+              <span className="sensei-muted block">
+                {territory
+                  ? <>目安: 黒 {blackArea}目 · 白 {whiteArea}目{typeof lead === 'number' ? ` · 形勢 ${lead >= 0 ? '黒' : '白'}+${Math.abs(lead).toFixed(1)}目` : ''}</>
+                  : 'AIが見込む陣地を盤に表示'}
               </span>
-              <RankPicker value={playerRank} onChange={onPlayerRankChange} />
-            </div>
+            </span>
+            <Switch checked={showTerritory} onChange={toggleTerritory} label="地を表示" />
+          </div>
             <div className="sensei-row">
               <span>読みの深さ</span>
               <Segmented
@@ -333,5 +327,12 @@ const EdgeIcon: React.FC<{ end: 'start' | 'end' }> = ({ end }) => (
   <svg width="18" height="14" viewBox="0 0 18 14" aria-hidden style={end === 'end' ? undefined : { transform: 'scaleX(-1)' }}>
     <path d="M1 1.5 L7 7 L1 12.5 Z M7.5 1.5 L13.5 7 L7.5 12.5 Z" fill="currentColor" />
     <rect x="14.5" y="1.5" width="2" height="11" rx="0.6" fill="currentColor" />
+  </svg>
+);
+
+/** ‹ and ›, drawn the same size as the |◀◀ and ▶▶| icons. */
+const StepIcon: React.FC<{ dir: 'back' | 'forward' }> = ({ dir }) => (
+  <svg width="12" height="14" viewBox="0 0 12 14" aria-hidden style={dir === 'forward' ? undefined : { transform: 'scaleX(-1)' }}>
+    <path d="M2 1.5 L9 7 L2 12.5 Z" fill="currentColor" />
   </svg>
 );

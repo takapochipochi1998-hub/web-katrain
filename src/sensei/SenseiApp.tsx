@@ -82,10 +82,12 @@ export const SenseiApp: React.FC = () => {
   const [tab, setTab] = useState<Tab>('play');
   const [view, setView] = useState<View>(null);
   const [toast, setToast] = useState<string | null>(null);
-  const [reviewRank, setReviewRank] = useState<Rank>(() => {
-    const book = loadRankBook();
-    return book[19].rank ?? book[13].rank ?? book[9].rank ?? '5k';
-  });
+  // The player's level, from the ranked rating: for the board size on screen,
+  // else any size they have a rating for, else 5 kyu.
+  const boardSize = useGameStore((s) => s.board.length);
+  const ratedSize = ([boardSize, 19, 13, 9] as const).find((n) => (n === 9 || n === 13 || n === 19) && ratingOf(ranks[n]) !== null);
+  const ratedState = ratedSize === 9 || ratedSize === 13 || ratedSize === 19 ? ranks[ratedSize] : null;
+  const reviewRank: Rank = ratedState ? rankForRating(ratingOf(ratedState)!) : '5k';
 
   // Review is the point of this mode, and the bundled test net is too weak for it.
   useEffect(() => {
@@ -278,7 +280,6 @@ export const SenseiApp: React.FC = () => {
       <ReviewScreen
         key={meta?.startedAt ?? 0}
         playerRank={reviewRank}
-        onPlayerRankChange={setReviewRank}
         geminiApiKey={prefs.geminiApiKey}
         geminiModel={prefs.geminiModel}
         onAddProblem={addProblem}

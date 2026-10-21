@@ -13,7 +13,7 @@ export const MOVE_QUALITY_LABEL: Record<MoveQuality, string> = {
   good: '好手',
   inaccuracy: '凡手',
   mistake: '悪手',
-  blunder: '敗着',
+  blunder: '大悪手',
 };
 
 /** Points lost at or above which a move falls into the grade. */

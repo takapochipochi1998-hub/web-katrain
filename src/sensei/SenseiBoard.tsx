@@ -14,6 +14,8 @@ export type BoardMarker = {
   textColor?: string;
   /** A ring around the point, in this colour: the move actually played. */
   ring?: string;
+  /** A see-through stone under the ring: whose move it was. */
+  played?: Player;
 };
 
 type Props = {
@@ -156,7 +158,7 @@ export const SenseiBoard: React.FC<Props> = ({ board, lastMove, markers = [], gh
               const black = v > 0;
               return (
                 <rect key={`t${x}-${y}`} x={at(x) - CELL / 2} y={at(y) - CELL / 2} width={CELL} height={CELL}
-                  fill={black ? '#000' : '#fff'} opacity={black ? 0.12 + sure * 0.45 : 0.25 + sure * 0.6} />
+                  fill={black ? '#000' : '#fffdf6'} opacity={black ? 0.12 + sure * 0.4 : 0.15 + sure * 0.4} />
               );
             }))}
           </g>
@@ -200,6 +202,11 @@ export const SenseiBoard: React.FC<Props> = ({ board, lastMove, markers = [], gh
           return (
             <g key={`m${m.x}-${m.y}`} pointerEvents="none">
               {m.fill && <circle cx={at(m.x)} cy={at(m.y)} r={CELL * 0.4} fill={m.fill} stroke="#fff" strokeWidth={1.5} />}
+              {m.played && (
+                <g opacity={0.6}>
+                  <Stone uid={uid} cx={at(m.x)} cy={at(m.y)} player={m.played} variant={0} flat />
+                </g>
+              )}
               {m.ring && <circle cx={at(m.x)} cy={at(m.y)} r={CELL * 0.47} fill="none" stroke={m.ring} strokeWidth={3.2} />}
               {m.label && (
                 <text x={at(m.x)} y={at(m.y) + 6} textAnchor="middle" fontSize={m.label.length > 2 ? 13 : 17} fontWeight={800} fill={color}>
