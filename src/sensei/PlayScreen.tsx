@@ -148,7 +148,6 @@ const FreeGameForm: React.FC<{ onStart: (config: GameConfig) => void }> = ({ onS
         <label htmlFor="sensei-ai-rank">AIの棋力</label>
         <RankPicker id="sensei-ai-rank" value={aiRank} onChange={setAiRank} />
       </div>
-      <p className="sensei-muted">手番（黒・白）は対局ごとにランダムに決まります。</p>
       <button type="button" className="sensei-ghost self-start !px-0" onClick={() => setShowDetails((v) => !v)}>
         詳細設定 {showDetails ? '▲' : '▼'}
       </button>
