@@ -230,7 +230,10 @@
 @keyframes sensei-fade { from { opacity: 0; } }
 
 @media (hover: hover) and (pointer: fine) {
-  .sensei-app button:not(:disabled):hover { box-shadow: inset 0 0 0 1px var(--s-accent); }
+  .sensei-app button:not(:disabled):not(.sensei-ghost, .sensei-back, .sensei-list-item):hover { box-shadow: inset 0 0 0 1px var(--s-accent); }
+  /* Text-only buttons have no box to outline; an outline hugs the glyphs. */
+  .sensei-app :is(.sensei-ghost, .sensei-back):not(:disabled):hover { opacity: 0.7; }
+  .sensei-app .sensei-list-item:hover { background: var(--s-surface-2); }
 }
 
 @media (max-width: 359px) {
