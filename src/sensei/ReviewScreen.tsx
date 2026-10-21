@@ -154,8 +154,8 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
   const candidates = allMoves
     .filter((m, i) => m.x >= 0 && (i === 0 || m.visits >= Math.max(2, rootVisits * 0.01)))
     .sort((a, b) => lossOf(a) - lossOf(b) || (b === allMoves[0] ? 1 : 0) - (a === allMoves[0] ? 1 : 0))
-    // In a try-out, the reply is the player's to choose: the opponent's best three.
-    .slice(0, onMain ? 10 : 3);
+    // Three at most: enough to compare, few enough to read at a glance.
+    .slice(0, 3);
   const isBest = (m: (typeof candidates)[number]) => m === allMoves[0];
   const steps = shadeSteps(candidates.map(lossOf));
 
@@ -248,7 +248,7 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
               {judged ? <Verdict verdict={judged} /> : <span className="sensei-muted">終局</span>}
               {!onMain && <button type="button" className="sensei-primary sensei-compact sensei-verdict-back" onClick={() => goTo(anchor)}>実戦に戻る</button>}
             </div>
-            {/* Fixed height, however many candidates there are, so taps below never shift. */}
+            {/* Fixed height (one row of three), so taps below never shift. */}
             <div className="sensei-candidates">
                 {bestIsPass && candidates.length === 0 && <span className="sensei-muted">AIの最善はパスです</span>}
                 {candidates.map((m, i) => {

@@ -335,7 +335,7 @@
 .sensei-mini-white { fill: #f7f5ef; stroke: rgb(0 0 0 / 0.35); stroke-width: 0.06; }
 .sensei-stone-inline { display: inline-block; width: 12px; height: 12px; margin-left: 6px; vertical-align: -1px; }
 /* The candidate grid keeps the height of three rows, so the page below never jumps. */
-.sensei-candidates { min-height: 144px; align-content: start; }
+.sensei-candidates { min-height: 44px; align-content: start; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .sensei-verdict-back { flex: none; }
 .sensei-verdict .sensei-loss + .sensei-verdict-back { margin-left: 4px; }
 .sensei-verdict > .sensei-verdict-back:nth-child(3) { margin-left: auto; }
@@ -345,3 +345,4 @@
 .sensei-mistakes button.is-current { background: var(--s-accent-soft); }
 .sensei-mistake-move { width: 4.5em; font-weight: 700; font-variant-numeric: tabular-nums; }
 .sensei-mistake-loss { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sensei-nav-buttons button { display: inline-flex; align-items: center; justify-content: center; }
