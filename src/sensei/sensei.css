@@ -173,7 +173,6 @@
 .sensei-game { display: flex; flex-direction: column; }
 .sensei-side { min-width: 0; padding: 4px max(16px, env(safe-area-inset-right)) 24px max(16px, env(safe-area-inset-left)); display: flex; flex-direction: column; gap: 12px; }
 .sensei-side .sensei-card { padding: 16px; }
-.sensei-players { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .sensei-player { display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 16px; background: var(--s-surface); border: 1px solid var(--s-border); min-width: 0; }
 .sensei-player.is-turn { border-color: var(--s-accent); background: var(--s-accent-soft); }
 .sensei-player-name { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -285,23 +284,13 @@
 }
 .sensei-clock-urgent { color: var(--s-bad); font-weight: 700; }
 
-/* Game top bar: menu, pass and resign, then the two players. */
-.sensei-gamebar { gap: 8px; padding-top: max(8px, env(safe-area-inset-top)); }
+/* Game top row: resign (and 検討に戻る for a resumed game). */
 .sensei-gamebar-row { display: flex; align-items: center; gap: 8px; }
 .sensei-compact { min-height: 40px; padding: 0 14px; font-size: 14px; }
-.sensei-gamebar .sensei-player { padding: 8px 10px; }
-.sensei-gamebar .sensei-status { min-height: 0; }
-@media (min-width: 900px) {
-  .sensei-gamebar { padding-top: 8px; order: 2; }
-}
-.sensei-gameinfo { gap: 8px; padding-top: 4px; }
-.sensei-gameinfo .sensei-player { padding: 8px 10px; }
-.sensei-gameinfo .sensei-status { min-height: 0; }
 .sensei-clock { flex: none; text-align: right; line-height: 1.15; }
 .sensei-clock-big { font-size: 19px; font-weight: 700; letter-spacing: 0.01em; }
 .sensei-clock-small { font-size: 11px; color: var(--s-muted); white-space: nowrap; }
 .sensei-player.is-byoyomi { border-color: var(--s-warn); background: color-mix(in srgb, var(--s-warn) 14%, var(--s-surface)); }
-.sensei-gameinfo .sensei-player, .sensei-gamebar .sensei-player { gap: 8px; }
 .sensei-player .sensei-player-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sensei-log { white-space: pre-wrap; word-break: break-all; font-size: 11px; line-height: 1.5; max-height: 40vh; overflow: auto; padding: 10px; border-radius: 10px; background: var(--s-surface-2, rgb(0 0 0 / 0.05)); }
 .sensei-status-pass { color: var(--s-warn); font-weight: 700; }
@@ -350,3 +339,18 @@
 /* A variation's five replies in one row. */
 .sensei-candidates.is-five { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
 .sensei-candidates.is-five button { flex-direction: column; gap: 2px; padding: 4px 2px; font-size: 11px; }
+
+/* The game: one column, opponent above the board and the player below; no tab bar while playing. */
+.sensei-app.is-playing .sensei-tabbar { display: none; }
+.sensei-app.is-playing .sensei-main { padding-bottom: env(safe-area-inset-bottom); }
+.sensei-play { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 760px; margin: 0 auto;
+  padding: max(8px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 16px max(12px, env(safe-area-inset-left)); }
+.sensei-play .sensei-board-wrap { padding: 0; margin: 0 calc(-1 * max(12px, env(safe-area-inset-left))); }
+.sensei-play .sensei-player { padding: 8px 10px; gap: 8px; }
+.sensei-play .sensei-status { min-height: 0; }
+.sensei-play-me { display: flex; gap: 8px; align-items: stretch; }
+.sensei-play-me .sensei-player { flex: 1; min-width: 0; }
+.sensei-pass { flex: none; min-width: 84px; font-size: 16px; font-weight: 700; border-radius: 14px; }
+@media (min-width: 900px) {
+  .sensei-play .sensei-board-wrap { margin: 0; position: static; }
+}

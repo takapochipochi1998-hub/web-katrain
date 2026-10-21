@@ -3,11 +3,10 @@ import { useGameStore } from '../store/gameStore';
 import type { GameNode, Player } from '../types';
 import { SenseiBoard } from './SenseiBoard';
 import { outcomeFor, parseResult, resultFromScoreLead, resultLabel } from './gameResult';
-import { rankLabel, recordResult, type RankBook, type RankedBoardSize } from './rankLadder';
+import { rankForRating, rankLabel, ratingOf, recordResult, type RankBook, type RankedBoardSize } from './rankLadder';
 import { loseOnTime, saveSession, type SessionMeta } from './session';
 import { formatClock, hasClock, spendTime, viewClock } from './clock';
 import { Dialog } from './ui';
-import { useNarrow } from './useNarrow';
 import { errorText, log } from './log';
 
 const COUNT_TIMEOUT_MS = 30_000;
@@ -55,7 +54,6 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
   const capturedWhite = useGameStore((s) => s.capturedWhite);
   useGameStore((s) => s.treeVersion); // endState is written in place; re-render on tree changes.
 
-  const narrow = useNarrow();
   const [confirmResign, setConfirmResign] = useState(false);
   const [dismissedNodeId, setDismissedNodeId] = useState<string | null>(null);
   const [ghost, setGhost] = useState<{ x: number; y: number; nodeId: string } | null>(null);
@@ -67,7 +65,6 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
   const counting = bothPassed && !ended;
   const humanToMove = !ended && !bothPassed && !isAiThinking && currentPlayer === meta.humanColor;
   const aiColor: Player = meta.humanColor === 'black' ? 'white' : 'black';
-  const aiName = `AI ${rankLabel(meta.aiRank)}`;
   const offRank = playedOffRank(currentNode, meta.humanColor);
   const size = meta.size as RankedBoardSize;
   // The player's clock: runs while it is their turn, charged when they move.
@@ -201,10 +198,6 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
       ? `おめでとうございます！ ${rankLabel(change.after)}相当になりました`
       : `${rankLabel(change.after)}相当になりました`
     : null;
-  const players: Array<{ color: Player; name: string; captures: number }> = [
-    { color: 'black', name: meta.humanColor === 'black' ? 'あなた' : aiName, captures: capturedWhite },
-    { color: 'white', name: meta.humanColor === 'white' ? 'あなた' : aiName, captures: capturedBlack },
-  ];
   // The clock is the chip's main figure; byo-yomi tints the chip so it shows at a glance.
   const flagged = parseResult(endState)?.margin === 'time';
   const clock = hasClock(tc) && clockView
@@ -215,69 +208,54 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
         : { big: formatClock(clockView.secondsLeft), small: tc.byoSec > 0 ? `+${tc.byoSec}秒×${clockView.periodsLeft}` : '', byo: false }
     : null;
   const clockUrgent = !!clock && clockRunning && !!clockView && (clockView.inByoyomi ? clockView.secondsLeft <= 10 : clockView.secondsLeft <= 30);
+  const rating = meta.kind === 'ranked' ? ratingOf(ranks[size]) : null;
+  const aiThinking = !ended && (isAiThinking || currentPlayer === aiColor) && !counting;
 
-  // The players and the result: beside the board on a wide screen, under it on a phone.
-  const info = (
-    <>
-      <div className="sensei-players">
-        {players.map((p) => {
-          const mine = p.color === meta.humanColor;
-          const thinking = !ended && p.color === aiColor && (isAiThinking || currentPlayer === aiColor) && !counting;
-          return (
-            <div key={p.color} className={`sensei-player${!ended && currentPlayer === p.color ? ' is-turn' : ''}${mine && clock?.byo ? ' is-byoyomi' : ''}`}>
-              <span className={`sensei-stone sensei-stone-${p.color}`} aria-hidden />
-              <div className="min-w-0 flex-1">
-                <div className="sensei-player-name">{p.name}</div>
-                <div className="sensei-player-sub">アゲハマ {p.captures}</div>
-              </div>
-              {mine && clock && (
-                <div className="sensei-clock" aria-label={`持ち時間 ${clock.big} ${clock.small.replace('+', '秒読み ')}`}>
-                  <div className={`sensei-clock-big tabular-nums${clockUrgent ? ' sensei-clock-urgent' : ''}`}>{clock.big}</div>
-                  {clock.small && <div className="sensei-clock-small">{clock.small}</div>}
-                </div>
-              )}
-              {thinking && <span className="sensei-spinner" aria-label="AIが考えています" />}
-            </div>
-          );
-        })}
-      </div>
-      {(counting || ended || aiPassed) && (
-        <div className={`sensei-status${aiPassed ? ' sensei-status-pass' : ''}`} aria-live="polite">
-          {ended
-            ? resultLabel(endState)
-            : countFailed
-              ? '地を数えられませんでした。検討画面で確かめてください'
-              : counting
-                ? <>地を数えています <span className="sensei-spinner" aria-hidden /></>
-                : 'AIがパスしました。あなたもパスすると終局です'}
+  // Like 囲碁シル: the opponent above the board, the player below it, each with their own facts.
+  const card = (who: 'ai' | 'me') => {
+    const color = who === 'me' ? meta.humanColor : aiColor;
+    const captures = color === 'black' ? capturedWhite : capturedBlack;
+    const level = who === 'ai'
+      ? rankLabel(meta.aiRank)
+      : rating !== null ? `レート ${rating} · ${rankLabel(rankForRating(rating))}相当` : '練習対局';
+    return (
+      <div className={`sensei-player${!ended && currentPlayer === color ? ' is-turn' : ''}${who === 'me' && clock?.byo ? ' is-byoyomi' : ''}`}>
+        <span className={`sensei-stone sensei-stone-${color}`} aria-hidden />
+        <div className="min-w-0 flex-1">
+          <div className="sensei-player-name">{who === 'me' ? 'あなた' : 'AI'}</div>
+          <div className="sensei-player-sub">{level}</div>
+          <div className="sensei-player-sub">アゲハマ {captures}</div>
         </div>
-      )}
-    </>
-  );
+        {who === 'me' && clock && (
+          <div className="sensei-clock" aria-label={`持ち時間 ${clock.big} ${clock.small.replace('+', '秒読み ')}`}>
+            <div className={`sensei-clock-big tabular-nums${clockUrgent ? ' sensei-clock-urgent' : ''}`}>{clock.big}</div>
+            {clock.small && <div className="sensei-clock-small">{clock.small}</div>}
+          </div>
+        )}
+        {who === 'ai' && aiThinking && <span className="sensei-spinner" aria-label="AIが考えています" />}
+      </div>
+    );
+  };
 
   return (
     <>
-      <div className="sensei-game">
-        <div className="sensei-side sensei-gamebar">
-          <div className="sensei-gamebar-row">
-            {onBackToReview && <button type="button" className="sensei-secondary sensei-compact" onClick={onBackToReview}>検討に戻る</button>}
-            <div className="flex-1" />
-            {countFailed ? (
+      <div className="sensei-play">
+        {/* No menus while playing: resign is the way out. */}
+        <div className="sensei-gamebar-row">
+          {onBackToReview && <button type="button" className="sensei-secondary sensei-compact" onClick={onBackToReview}>検討に戻る</button>}
+          <div className="flex-1" />
+          {countFailed ? (
+            <button type="button" className="sensei-primary sensei-compact" onClick={onReview}>検討する</button>
+          ) : !ended ? (
+            <button type="button" className="sensei-danger sensei-compact" disabled={counting} onClick={() => setConfirmResign(true)}>投了</button>
+          ) : (
+            <>
+              <button type="button" className="sensei-secondary sensei-compact" onClick={onReplay}>もう一度対局</button>
               <button type="button" className="sensei-primary sensei-compact" onClick={onReview}>検討する</button>
-            ) : !ended ? (
-              <>
-                <button type="button" className="sensei-secondary sensei-compact" disabled={!humanToMove} onClick={() => { setGhost(null); useGameStore.getState().passTurn(); }}>パス</button>
-                <button type="button" className="sensei-danger sensei-compact" disabled={counting} onClick={() => setConfirmResign(true)}>投了</button>
-              </>
-            ) : (
-              <>
-                <button type="button" className="sensei-secondary sensei-compact" onClick={onReplay}>もう一度対局</button>
-                <button type="button" className="sensei-primary sensei-compact" onClick={onReview}>検討する</button>
-              </>
-            )}
-          </div>
-          {!narrow && info}
+            </>
+          )}
         </div>
+        {card('ai')}
         <div className="sensei-board-wrap">
           <SenseiBoard
             board={board}
@@ -288,7 +266,23 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
             onTap={tap}
           />
         </div>
-        {narrow && <div className="sensei-side sensei-gameinfo">{info}</div>}
+        <div className="sensei-play-me">
+          {card('me')}
+          {!ended && (
+            <button type="button" className="sensei-primary sensei-pass" disabled={!humanToMove} onClick={() => { setGhost(null); useGameStore.getState().passTurn(); }}>パス</button>
+          )}
+        </div>
+        {(counting || ended || aiPassed) && (
+          <div className={`sensei-status${aiPassed ? ' sensei-status-pass' : ''}`} aria-live="polite">
+            {ended
+              ? resultLabel(endState)
+              : countFailed
+                ? '地を数えられませんでした。検討画面で確かめてください'
+                : counting
+                  ? <>地を数えています <span className="sensei-spinner" aria-hidden /></>
+                  : 'AIがパスしました。あなたもパスすると終局です'}
+          </div>
+        )}
       </div>
 
       {confirmResign && (

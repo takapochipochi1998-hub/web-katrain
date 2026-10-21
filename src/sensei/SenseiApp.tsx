@@ -349,7 +349,7 @@ export const SenseiApp: React.FC = () => {
 
   return (
     <BoardPrefsContext.Provider value={boardPrefs}>
-    <div className={`sensei-app${view ? ' is-immersive' : ''}`}>
+    <div className={`sensei-app${view ? ' is-immersive' : ''}${view === 'game' ? ' is-playing' : ''}`}>
       <div className="sensei-shell">
         <nav className="sensei-tabbar" aria-label="メインメニュー">
           {TABS.map((t) => (
