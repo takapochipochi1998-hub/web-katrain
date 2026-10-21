@@ -138,7 +138,6 @@ import { GAME_RECORD_ACCEPT, GAME_RECORD_EXTENSION, isGameRecordFile, readGameRe
 import { getPvAnimationProgress } from '../utils/pvAnimation';
 import { startDomTranslation } from '../i18n/domTranslate';
 import { JA_DICTIONARY } from '../i18n/ja';
-import { consumeSwitchedFromSimpleMode } from '../sensei/uiMode';
 
 const settingsModalChunk = createWarmableLazy(() => import('./SettingsModal'), (module) => module.SettingsModal);
 const SettingsModal = settingsModalChunk.Component;
@@ -1261,8 +1260,7 @@ export const Layout: React.FC = () => {
     if (autoSaveRecoveryCheckedRef.current) return;
     autoSaveRecoveryCheckedRef.current = true;
     const snapshot = readAutoSavedGame();
-    // Switched in from the simple mode: the board holds its live game, and an older snapshot would replace it.
-    if (snapshot && snapshot.sgf !== generateCurrentSgf() && !consumeSwitchedFromSimpleMode()) {
+    if (snapshot && snapshot.sgf !== generateCurrentSgf()) {
       setAutoSaveRecovery(snapshot);
     }
     setAutoSaveRecoveryChecked(true);

@@ -28,6 +28,8 @@ import {
 } from './session';
 import { Icons } from './icons';
 import { Toast } from './ui';
+import { ErrorBoundary } from './ErrorBoundary';
+import { log } from './log';
 
 type Tab = 'play' | 'games' | 'problems' | 'settings';
 type View = 'game' | 'review' | null;
@@ -115,13 +117,17 @@ export const SenseiApp: React.FC = () => {
     return () => { clearTimeout(timer); unsubscribe(); };
   }, [meta]);
 
+  useEffect(() => { log('screen', { tab, view: view ?? '-' }); }, [tab, view]);
+
   const updateRanks = useCallback((book: RankBook) => { setRanks(book); saveRankBook(book); }, []);
   const updatePrefs = (next: Preferences) => { setPrefs(next); storePreferences(next); };
   const updateProblems = (next: Problem[]) => { setProblems(next); storeProblems(next); };
 
   const begin = (config: GameConfig) => {
     setLastConfig(config);
-    setMeta(startGame({ ...config, timeControl: prefs.timeControl }));
+    const started = startGame({ ...config, timeControl: prefs.timeControl });
+    log('game-start', { kind: started.kind, size: started.size, ai: started.aiRank, human: started.humanColor, time: prefs.timeControl.mainSec, byo: prefs.timeControl.byoSec });
+    setMeta(started);
     setView('game');
   };
 
@@ -199,7 +205,7 @@ export const SenseiApp: React.FC = () => {
         onRanksChange={updateRanks}
         onMetaChange={setMeta}
         onReplay={replay}
-        onReview={() => setView('review')}
+        onReview={() => { log('open-review', { from: 'game' }); setView('review'); }}
         onNavigate={navigate}
       />
     );
@@ -267,7 +273,9 @@ export const SenseiApp: React.FC = () => {
             </button>
           ))}
         </nav>
-        <main className="sensei-main">{content}</main>
+        <main className="sensei-main">
+          <ErrorBoundary key={`${tab}:${view ?? '-'}`} onReset={() => navigate('play')}>{content}</ErrorBoundary>
+        </main>
       </div>
       {toast && <Toast message={toast} onDone={() => setToast(null)} />}
     </div>

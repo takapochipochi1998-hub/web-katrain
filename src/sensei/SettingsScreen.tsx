@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
+import { clearLog, exportLog } from './log';
+import { runSpeedTest, type SpeedRow } from './speedTest';
 import { useGameStore } from '../store/gameStore';
 import { DEFAULT_GEMINI_MODEL, type Preferences } from './preferences';
 import { BYO_PERIODS } from './clock';
-import { setUiMode } from './uiMode';
 import { Header, Segmented, Switch } from './ui';
 
 
@@ -27,6 +28,28 @@ export const SettingsScreen: React.FC<Props> = ({ prefs, onChange }) => {
   const [keyDraft, setKeyDraft] = useState(prefs.geminiApiKey);
   const [modelDraft, setModelDraft] = useState(prefs.geminiModel);
   const set = (patch: Partial<Preferences>) => onChange({ ...prefs, ...patch });
+  const [tokenDraft, setTokenDraft] = useState(prefs.cloudToken);
+  const [speedRows, setSpeedRows] = useState<SpeedRow[] | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [logNote, setLogNote] = useState<string | null>(null);
+
+  const speedTest = async () => {
+    setTesting(true);
+    setSpeedRows([]);
+    const cloud = prefs.cloudToken ? { url: prefs.cloudUrl, token: prefs.cloudToken } : null;
+    await runSpeedTest(cloud, setSpeedRows).catch(() => undefined);
+    setTesting(false);
+  };
+
+  const copyLog = async () => {
+    const text = exportLog();
+    try {
+      await navigator.clipboard.writeText(text);
+      setLogNote('コピーしました');
+    } catch {
+      setLogNote(text);
+    }
+  };
 
   return (
     <>
@@ -94,6 +117,51 @@ export const SettingsScreen: React.FC<Props> = ({ prefs, onChange }) => {
           <p className="sensei-muted">既定は {DEFAULT_GEMINI_MODEL}（速く、無料枠が多い）。動作を確かめたのはこのモデルだけです。</p>
         </div>
 
+        <div className="sensei-section-label">クラウド解析（試験中）</div>
+        <div className="sensei-card sensei-stack">
+          <label className="flex flex-col gap-2">
+            <span>合言葉</span>
+            <input
+              className="sensei-input"
+              type="password"
+              autoComplete="off"
+              placeholder="クラウドの合言葉"
+              value={tokenDraft}
+              onChange={(e) => setTokenDraft(e.target.value)}
+              onBlur={() => set({ cloudToken: tokenDraft.trim() })}
+            />
+          </label>
+          <p className="sensei-muted">この端末の中だけに保存します。空のままなら端末内のみで計ります。</p>
+          <button type="button" className="sensei-secondary" disabled={testing} onClick={() => void speedTest()}>
+            {testing ? '計測中…' : '速度テスト'}
+          </button>
+          {speedRows && speedRows.length > 0 && (
+            <table className="sensei-speed">
+              <thead><tr><th /><th>端末内</th><th>クラウド</th></tr></thead>
+              <tbody>
+                {speedRows.map((r) => (
+                  <tr key={r.label}>
+                    <th>{r.label}</th>
+                    <td>{r.device !== undefined ? `${(r.device / 1000).toFixed(2)}秒` : '…'}</td>
+                    <td>{r.cloud !== undefined ? `${(r.cloud / 1000).toFixed(2)}秒` : prefs.cloudToken ? '…' : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {speedRows?.some((r) => r.note) && <p className="sensei-muted">{speedRows.filter((r) => r.note).map((r) => r.note).join(' / ')}</p>}
+        </div>
+
+        <div className="sensei-section-label">ログ</div>
+        <div className="sensei-card sensei-stack">
+          <p className="sensei-muted">画面の移動・対局・エラーをこの端末に記録しています。不具合があったらコピーして送ってください。</p>
+          <div className="sensei-actions">
+            <button type="button" className="sensei-secondary" onClick={() => { clearLog(); setLogNote('消去しました'); }}>消去</button>
+            <button type="button" className="sensei-primary" onClick={() => void copyLog()}>ログをコピー</button>
+          </div>
+          {logNote && (logNote.length > 40 ? <pre className="sensei-log">{logNote}</pre> : <p className="sensei-muted">{logNote}</p>)}
+        </div>
+
         <div className="sensei-section-label">そのほか</div>
         <div className="sensei-card">
           <div className="sensei-row">
@@ -107,13 +175,6 @@ export const SettingsScreen: React.FC<Props> = ({ prefs, onChange }) => {
               効果音
               <span className="sensei-muted block">碁石の音は KaTrain（MIT）より。録音: Jordan Seaward、Funkenschlag1</span>
             </span>
-          </div>
-          <div className="sensei-row">
-            <span>
-              詳細モード
-              <span className="sensei-muted block">web-katrainの元の画面。細かい解析や設定ができます</span>
-            </span>
-            <button type="button" className="sensei-secondary" onClick={() => setUiMode('classic')}>開く</button>
           </div>
         </div>
       </div>

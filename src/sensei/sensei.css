@@ -261,16 +261,6 @@
   .sensei-toast { left: calc(50% + 48px); bottom: calc(24px + env(safe-area-inset-bottom)); }
 }
 
-/* This button lives outside .sensei-app, in the detail-mode shell. */
-.sensei-back-to-simple {
-  --s-accent: #345ac1;
-  --s-accent-text: #ffffff;
-  --s-shadow: 0 2px 8px rgb(0 0 0 / 0.2);
-  position: fixed; left: calc(52px + env(safe-area-inset-left)); top: calc(12px + env(safe-area-inset-top)); z-index: 60;
-  min-height: 44px; padding: 10px 14px; border-radius: 14px; font-size: 12px; font-weight: 700;
-  background: var(--s-accent); color: var(--s-accent-text); box-shadow: var(--s-shadow);
-}
-.sensei-back-to-simple:active { opacity: 0.8; }
 
 @media (prefers-reduced-motion: reduce) {
   .sensei-app *, .sensei-app *::before, .sensei-app *::after { transition: none; animation: none; }
@@ -317,3 +307,9 @@
 .sensei-player.is-byoyomi { border-color: var(--s-warn); background: color-mix(in srgb, var(--s-warn) 14%, var(--s-surface)); }
 .sensei-gameinfo .sensei-player, .sensei-gamebar .sensei-player { gap: 8px; }
 .sensei-player .sensei-player-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sensei-log { white-space: pre-wrap; word-break: break-all; font-size: 11px; line-height: 1.5; max-height: 40vh; overflow: auto; padding: 10px; border-radius: 10px; background: var(--s-surface-2, rgb(0 0 0 / 0.05)); }
+.sensei-status-pass { color: var(--s-warn); font-weight: 700; }
+.sensei-speed { width: 100%; font-size: 13px; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.sensei-speed th, .sensei-speed td { padding: 6px 4px; text-align: right; }
+.sensei-speed tbody th { text-align: left; font-weight: 500; }
+.sensei-speed thead th { font-size: 12px; color: var(--s-muted); font-weight: 600; }

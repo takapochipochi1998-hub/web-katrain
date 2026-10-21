@@ -8,6 +8,9 @@ import { loseOnTime, saveSession, type SessionMeta } from './session';
 import { formatClock, hasClock, spendTime, viewClock } from './clock';
 import { Dialog, NavMenu, type NavTarget } from './ui';
 import { useNarrow } from './useNarrow';
+import { errorText, log } from './log';
+
+const COUNT_TIMEOUT_MS = 30_000;
 
 const isPass = (m: { x: number; y: number } | null | undefined) => !!m && m.x < 0;
 
@@ -103,19 +106,54 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
   const liveGhost = ghost && ghost.nodeId === currentNode.id && humanToMove ? ghost : null;
 
   // Two passes end the game but leave it uncounted: let the engine count it.
+  // If the engine cannot (it failed, or took too long), the game stays reviewable.
+  const [countFailedNodeId, setCountFailedNodeId] = useState<string | null>(null);
   useEffect(() => {
     if (!counting || countingNodeRef.current === currentNode.id) return;
-    countingNodeRef.current = currentNode.id;
+    const nodeId = currentNode.id;
+    countingNodeRef.current = nodeId;
     useGameStore.setState({ isAiPlaying: false, aiColor: null });
+    log('count-start', { online: navigator.onLine });
+    const started = Date.now();
     void (async () => {
-      // runAnalysis does nothing unless analysis mode is on.
-      if (!useGameStore.getState().isAnalysisMode) useGameStore.getState().toggleAnalysisMode();
-      await useGameStore.getState().runAnalysis({ force: true, visits: 400 });
-      const lead = useGameStore.getState().currentNode.analysis?.rootScoreLead;
-      if (typeof lead === 'number') useGameStore.getState().recordCountedResult(resultFromScoreLead(lead));
+      try {
+        // runAnalysis does nothing unless analysis mode is on.
+        if (!useGameStore.getState().isAnalysisMode) useGameStore.getState().toggleAnalysisMode();
+        await Promise.race([
+          useGameStore.getState().runAnalysis({ force: true, visits: 400 }),
+          new Promise((resolve) => setTimeout(resolve, COUNT_TIMEOUT_MS)),
+        ]);
+      } catch (e) {
+        log('count-error', { error: errorText(e).slice(0, 300) });
+      }
+      const state = useGameStore.getState();
+      const lead = state.currentNode.id === nodeId ? state.currentNode.analysis?.rootScoreLead : undefined;
+      if (typeof lead === 'number') {
+        const result = resultFromScoreLead(lead);
+        state.recordCountedResult(result);
+        log('count-done', { result, ms: Date.now() - started });
+      } else {
+        log('count-failed', { ms: Date.now() - started });
+        setCountFailedNodeId(nodeId);
+      }
       useGameStore.setState((s) => ({ treeVersion: s.treeVersion + 1 }));
     })();
   }, [counting, currentNode.id]);
+  const countFailed = counting && countFailedNodeId === currentNode.id;
+
+  // The diary: every move with who played it and how long the bot took.
+  useEffect(() => {
+    const move = currentNode.move;
+    if (!move) { turnStartFor(currentNode); return; }
+    const by = move.player === meta.humanColor ? 'human' : 'ai';
+    const parent = currentNode.parent;
+    const ms = by === 'ai' && parent ? Date.now() - turnStartFor(parent) : undefined;
+    log('move', { by, at: move.x < 0 ? 'pass' : `${move.x},${move.y}`, ...(ms !== undefined ? { ms } : {}) });
+    turnStartFor(currentNode); // Stamp when this position appeared, for timing the reply.
+  }, [currentNode, meta.humanColor]);
+  useEffect(() => {
+    if (endState) log('game-end', { result: endState });
+  }, [endState]);
 
   // Move the ranked ladder once per finished game.
   useEffect(() => {
@@ -145,6 +183,7 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
   };
 
   const lastMove = currentNode.move && !isPass(currentNode.move) ? currentNode.move : null;
+  const aiPassed = !ended && !counting && isPass(currentNode.move) && currentNode.move?.player === aiColor;
   const outcome = outcomeFor(endState, meta.humanColor);
   const dialogOpen = ended && dismissedNodeId !== currentNode.id;
   const change = meta.kind === 'ranked' ? ranks[size].history.find((h) => h.at >= meta.startedAt) : undefined;
@@ -193,9 +232,15 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
           );
         })}
       </div>
-      {(counting || ended) && (
-        <div className="sensei-status" aria-live="polite">
-          {ended ? resultLabel(endState) : <>地を数えています <span className="sensei-spinner" aria-hidden /></>}
+      {(counting || ended || aiPassed) && (
+        <div className={`sensei-status${aiPassed ? ' sensei-status-pass' : ''}`} aria-live="polite">
+          {ended
+            ? resultLabel(endState)
+            : countFailed
+              ? '地を数えられませんでした。検討画面で確かめてください'
+              : counting
+                ? <>地を数えています <span className="sensei-spinner" aria-hidden /></>
+                : 'AIがパスしました。あなたもパスすると終局です'}
         </div>
       )}
     </>
@@ -208,7 +253,9 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
           <div className="sensei-gamebar-row">
             <NavMenu onNavigate={onNavigate} />
             <div className="flex-1" />
-            {!ended ? (
+            {countFailed ? (
+              <button type="button" className="sensei-primary sensei-compact" onClick={onReview}>検討する</button>
+            ) : !ended ? (
               <>
                 <button type="button" className="sensei-secondary sensei-compact" disabled={!humanToMove} onClick={() => { setGhost(null); useGameStore.getState().passTurn(); }}>パス</button>
                 <button type="button" className="sensei-danger sensei-compact" disabled={counting} onClick={() => setConfirmResign(true)}>投了</button>

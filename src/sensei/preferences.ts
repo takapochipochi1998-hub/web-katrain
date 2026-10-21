@@ -10,15 +10,21 @@ export type Preferences = {
   /** Gemini API key for "AIに聞く"; stays on this device. */
   geminiApiKey: string;
   geminiModel: string;
+  /** Cloud KataGo (Modal): its address and the shared secret; both stay on this device. */
+  cloudUrl: string;
+  cloudToken: string;
 };
 
 export const DEFAULT_GEMINI_MODEL = 'gemini-3.1-flash-lite-preview';
+export const DEFAULT_CLOUD_URL = 'https://takapochipochi1998-hub--go-ai-trainer-katago-usw-katago-web.us-west.modal.run';
 
 export const defaultPreferences = (): Preferences => ({
   confirmMoves: true,
   timeControl: NO_TIME_CONTROL,
   geminiApiKey: '',
   geminiModel: DEFAULT_GEMINI_MODEL,
+  cloudUrl: DEFAULT_CLOUD_URL,
+  cloudToken: '',
 });
 
 const STORAGE_KEY = 'web-katrain:sensei-preferences:v1';
@@ -34,6 +40,8 @@ export function parsePreferences(raw: unknown): Preferences {
   }
   if (typeof r.geminiApiKey === 'string') prefs.geminiApiKey = r.geminiApiKey.trim();
   if (typeof r.geminiModel === 'string' && r.geminiModel.trim()) prefs.geminiModel = r.geminiModel.trim();
+  if (typeof r.cloudUrl === 'string' && /^https:\/\//.test(r.cloudUrl.trim())) prefs.cloudUrl = r.cloudUrl.trim();
+  if (typeof r.cloudToken === 'string') prefs.cloudToken = r.cloudToken.trim();
   return prefs;
 }
 

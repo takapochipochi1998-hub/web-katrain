@@ -1,24 +1,14 @@
-import { useEffect, useState } from 'react';
-import { Layout } from './components/Layout';
-import { PwaInstallBanner } from './components/PwaInstallBanner';
 import { SenseiApp } from './sensei/SenseiApp';
-import { getUiMode, setUiMode, subscribeUiMode, type UiMode } from './sensei/uiMode';
+import { installErrorLogging } from './sensei/log';
+import { removeLocalStorage } from './utils/storage';
 import './sensei/sensei.css';
 
-function App() {
-  const [mode, setMode] = useState<UiMode>(() => getUiMode());
-  useEffect(() => subscribeUiMode(setMode), []);
+installErrorLogging();
+// The detail mode (web-katrain's own screen) is gone; forget a stored choice of it.
+removeLocalStorage('web-katrain:sensei-ui-mode:v1');
 
-  if (mode === 'simple') return <SenseiApp />;
-  return (
-    <>
-      <Layout />
-      <PwaInstallBanner />
-      <button type="button" className="sensei-back-to-simple" onClick={() => setUiMode('simple')}>
-        かんたんモード
-      </button>
-    </>
-  );
+function App() {
+  return <SenseiApp />;
 }
 
 export default App;
