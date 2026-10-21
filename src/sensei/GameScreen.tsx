@@ -157,32 +157,37 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
     { color: 'black', name: meta.humanColor === 'black' ? 'あなた' : aiName, captures: capturedWhite },
     { color: 'white', name: meta.humanColor === 'white' ? 'あなた' : aiName, captures: capturedBlack },
   ];
+  // The clock is the chip's main figure; byo-yomi tints the chip so it shows at a glance.
   const flagged = parseResult(endState)?.margin === 'time';
-  const clockLabel = flagged
-    ? '時間切れ'
-    : clockView
-    ? clockView.inByoyomi
-      ? `秒読み ${formatClock(clockView.secondsLeft)}（残り${clockView.periodsLeft}回）`
-      : `残り ${formatClock(clockView.secondsLeft)}`
+  const clock = hasClock(tc) && clockView
+    ? flagged
+      ? { big: '0:00', small: '時間切れ', byo: true }
+      : clockView.inByoyomi
+        ? { big: String(Math.max(0, Math.ceil(clockView.secondsLeft))), small: `残り${clockView.periodsLeft}回`, byo: true }
+        : { big: formatClock(clockView.secondsLeft), small: tc.byoSec > 0 ? `+${tc.byoSec}秒×${clockView.periodsLeft}` : '', byo: false }
     : null;
-  const clockUrgent = !!clockView && clockRunning && (clockView.inByoyomi ? clockView.secondsLeft <= 10 : clockView.secondsLeft <= 30);
+  const clockUrgent = !!clock && clockRunning && !!clockView && (clockView.inByoyomi ? clockView.secondsLeft <= 10 : clockView.secondsLeft <= 30);
 
   // The players and the result: beside the board on a wide screen, under it on a phone.
   const info = (
     <>
       <div className="sensei-players">
         {players.map((p) => {
+          const mine = p.color === meta.humanColor;
           const thinking = !ended && p.color === aiColor && (isAiThinking || currentPlayer === aiColor) && !counting;
           return (
-            <div key={p.color} className={`sensei-player${!ended && currentPlayer === p.color ? ' is-turn' : ''}`}>
+            <div key={p.color} className={`sensei-player${!ended && currentPlayer === p.color ? ' is-turn' : ''}${mine && clock?.byo ? ' is-byoyomi' : ''}`}>
               <span className={`sensei-stone sensei-stone-${p.color}`} aria-hidden />
               <div className="min-w-0 flex-1">
                 <div className="sensei-player-name">{p.name}</div>
                 <div className="sensei-player-sub">アゲハマ {p.captures}</div>
-                {clockLabel && p.color === meta.humanColor && (
-                  <div className={`sensei-player-sub tabular-nums${clockUrgent ? ' sensei-clock-urgent' : ''}`}>{clockLabel}</div>
-                )}
               </div>
+              {mine && clock && (
+                <div className="sensei-clock" aria-label={`持ち時間 ${clock.big} ${clock.small.replace('+', '秒読み ')}`}>
+                  <div className={`sensei-clock-big tabular-nums${clockUrgent ? ' sensei-clock-urgent' : ''}`}>{clock.big}</div>
+                  {clock.small && <div className="sensei-clock-small">{clock.small}</div>}
+                </div>
+              )}
               {thinking && <span className="sensei-spinner" aria-label="AIが考えています" />}
             </div>
           );

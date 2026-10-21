@@ -311,3 +311,9 @@
 .sensei-gameinfo { gap: 8px; padding-top: 4px; }
 .sensei-gameinfo .sensei-player { padding: 8px 10px; }
 .sensei-gameinfo .sensei-status { min-height: 0; }
+.sensei-clock { flex: none; text-align: right; line-height: 1.15; }
+.sensei-clock-big { font-size: 22px; font-weight: 700; letter-spacing: 0.01em; }
+.sensei-clock-small { font-size: 11px; color: var(--s-muted); white-space: nowrap; }
+.sensei-player.is-byoyomi { border-color: var(--s-warn); background: color-mix(in srgb, var(--s-warn) 14%, var(--s-surface)); }
+.sensei-gameinfo .sensei-player, .sensei-gamebar .sensei-player { gap: 8px; }
+.sensei-player .sensei-player-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
