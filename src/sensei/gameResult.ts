@@ -34,7 +34,7 @@ export function resultLabel(endState: string | null | undefined): string {
   if (!result.winner) return '持碁';
   const side = result.winner === 'black' ? '黒' : '白';
   if (result.margin === 'resign') return `${side} 中押し勝ち`;
-  if (result.margin === 'time') return `${side} 時間勝ち`;
+  if (result.margin === 'time') return `${side} 時間切れ勝ち`;
   if (typeof result.margin === 'number') return `${side} ${result.margin}目勝ち`;
   return `${side} 勝ち`;
 }

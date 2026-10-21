@@ -6,6 +6,7 @@ import { useGameStore } from '../store/gameStore';
 import type { BoardSize, GameNode, Player } from '../types';
 import { parseSgf } from '../utils/sgf';
 import { sgfForPath } from './sgfPath';
+import { hasClock, startClock, type Clock, type TimeControl } from './clock';
 import { humanProfileFor, humanWeaknessFor, isRank, rankLabel, type Rank } from './rankLadder';
 import { readLocalStorage, removeLocalStorage, writeLocalStorage } from '../utils/storage';
 
@@ -19,6 +20,9 @@ export type SessionMeta = {
   startedAt: number;
   /** Set once the result has moved the ranked ladder, so it moves only once. */
   rankRecorded: boolean;
+  /** The player's time limit for this game and what is left of it. */
+  timeControl?: TimeControl;
+  clock?: Clock;
 };
 
 export type GameConfig = {
@@ -27,7 +31,19 @@ export type GameConfig = {
   aiRank: Rank;
   handicap: number;
   komi: number;
+  timeControl?: TimeControl;
 };
+
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0;
+
+/** Clock fields from storage, dropped unless they are whole and sane. */
+export function parseClockFields(raw: Partial<Pick<SessionMeta, 'timeControl' | 'clock'>>): Pick<SessionMeta, 'timeControl' | 'clock'> {
+  const tc = raw.timeControl;
+  const clock = raw.clock;
+  if (!tc || !isNum(tc.mainSec) || !isNum(tc.byoSec) || !isNum(tc.periods) || !hasClock(tc)) return {};
+  if (!clock || !isNum(clock.mainLeft) || !isNum(clock.periodsLeft)) return { timeControl: tc, clock: startClock(tc) };
+  return { timeControl: tc, clock };
+}
 
 /** Colours are drawn at random, except that handicap stones are the player's. */
 export function drawHumanColor(handicap: number, random: () => number = Math.random): Player {
@@ -36,6 +52,14 @@ export function drawHumanColor(handicap: number, random: () => number = Math.ran
 }
 
 const STORAGE_KEY = 'web-katrain:sensei-session:v1';
+
+/**
+ * Search for the bot's own moves. The human-like bot picks from the human net's
+ * policy and the search barely weighs in (KataGo's imitate settings), so a short
+ * search keeps its strength and only guards the pass decision: about a third of
+ * the time of 100 visits.
+ */
+export const HUMAN_BOT_VISITS = 16;
 
 /**
  * The tree the simple mode put in the store. The detail mode shares the store
@@ -59,6 +83,7 @@ export function loadSession(): SessionMeta | null {
       humanColor: raw.humanColor,
       startedAt: typeof raw.startedAt === 'number' ? raw.startedAt : Date.now(),
       rankRecorded: raw.rankRecorded === true,
+      ...parseClockFields(raw),
     };
   } catch {
     return null;
@@ -88,6 +113,7 @@ export function startGame(config: GameConfig): SessionMeta {
     aiStrategy: 'human',
     humanSlProfile: humanProfileFor(config.aiRank),
     aiHumanWeakness: humanWeaknessFor(config.aiRank),
+    aiMoveVisits: HUMAN_BOT_VISITS,
     timerMainTimeMinutes: 0,
     timerByoLengthSeconds: 0,
     timerByoPeriods: 0,
@@ -104,6 +130,7 @@ export function startGame(config: GameConfig): SessionMeta {
     humanColor: humanColor,
     startedAt: Date.now(),
     rankRecorded: false,
+    ...(hasClock(config.timeControl) ? { timeControl: config.timeControl, clock: startClock(config.timeControl) } : {}),
   };
   saveSession(meta);
   return meta;
@@ -116,7 +143,7 @@ function resumeBot(meta: SessionMeta): void {
   if (store.isContinuousAnalysis) store.toggleContinuousAnalysis(true);
   if (useGameStore.getState().isAnalysisMode) useGameStore.getState().toggleAnalysisMode();
   const aiColor: Player = meta.humanColor === 'black' ? 'white' : 'black';
-  store.updateSettings({ aiStrategy: 'human', humanSlProfile: humanProfileFor(meta.aiRank), aiHumanWeakness: humanWeaknessFor(meta.aiRank) });
+  store.updateSettings({ aiStrategy: 'human', humanSlProfile: humanProfileFor(meta.aiRank), aiHumanWeakness: humanWeaknessFor(meta.aiRank), aiMoveVisits: HUMAN_BOT_VISITS });
   useGameStore.setState({ isAiPlaying: true, aiColor });
   if (useGameStore.getState().currentPlayer === aiColor) useGameStore.getState().scheduleAiMove(300);
 }
@@ -156,4 +183,14 @@ export function startFromPosition(node: GameNode, aiRank: Rank): SessionMeta {
   saveSession(meta);
   resumeBot(meta);
   return meta;
+}
+
+/** The player ran out of time: the game is lost on time ("W+T" / "B+T"). */
+export function loseOnTime(humanColor: Player): void {
+  const state = useGameStore.getState();
+  const result = `${humanColor === 'black' ? 'W' : 'B'}+T`;
+  state.currentNode.endState = result;
+  state.rootNode.properties = state.rootNode.properties ?? {};
+  state.rootNode.properties.RE = [result];
+  useGameStore.setState((s) => ({ isAiPlaying: false, isAiThinking: false, aiColor: null, treeVersion: s.treeVersion + 1 }));
 }

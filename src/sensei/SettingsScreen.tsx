@@ -1,20 +1,27 @@
 import React, { useState } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { DEFAULT_GEMINI_MODEL, type Preferences } from './preferences';
+import { BYO_PERIODS } from './clock';
 import { setUiMode } from './uiMode';
 import { Header, Segmented, Switch } from './ui';
 
 
-const AI_DEPTH = [
-  { value: 50, label: '速い' },
-  { value: 100, label: '標準' },
-  { value: 300, label: '強め' },
+const MAIN_TIMES = [
+  { value: 0, label: 'なし' },
+  { value: 600, label: '10分' },
+  { value: 1200, label: '20分' },
+  { value: 1800, label: '30分' },
+] as const;
+
+const BYO_TIMES = [
+  { value: 0, label: 'なし' },
+  { value: 30, label: '30秒' },
+  { value: 60, label: '60秒' },
 ] as const;
 
 type Props = { prefs: Preferences; onChange: (prefs: Preferences) => void };
 
 export const SettingsScreen: React.FC<Props> = ({ prefs, onChange }) => {
-  const aiMoveVisits = useGameStore((s) => s.settings.aiMoveVisits);
   const engineBackend = useGameStore((s) => s.engineBackend);
   const engineModelName = useGameStore((s) => s.engineModelName);
   const [keyDraft, setKeyDraft] = useState(prefs.geminiApiKey);
@@ -35,19 +42,24 @@ export const SettingsScreen: React.FC<Props> = ({ prefs, onChange }) => {
             <Switch checked={prefs.confirmMoves} onChange={(v) => set({ confirmMoves: v })} label="着手の確認" />
           </div>
           <div className="sensei-row">
-            <span>対局中に形勢を表示</span>
-            <Switch checked={prefs.showScoreInGame} onChange={(v) => set({ showScoreInGame: v })} label="対局中に形勢を表示" />
+            <span>持ち時間</span>
+            <Segmented
+              options={MAIN_TIMES}
+              value={(MAIN_TIMES.find((o) => o.value === prefs.timeControl.mainSec)?.value ?? 0) as (typeof MAIN_TIMES)[number]['value']}
+              onChange={(v) => set({ timeControl: { ...prefs.timeControl, mainSec: v } })}
+              label="持ち時間"
+            />
           </div>
           <div className="sensei-row">
             <span>
-              AIの応手の速さ
-              <span className="sensei-muted block">AIが1手ごとに読む量。遅い端末では「速い」</span>
+              秒読み
+              <span className="sensei-muted block">持ち時間のあと、1手ごとに。{BYO_PERIODS}回まで超過できます</span>
             </span>
             <Segmented
-              options={AI_DEPTH}
-              value={(AI_DEPTH.find((d) => d.value === aiMoveVisits)?.value ?? 100) as (typeof AI_DEPTH)[number]['value']}
-              onChange={(v) => useGameStore.getState().updateSettings({ aiMoveVisits: v })}
-              label="AIの応手の速さ"
+              options={BYO_TIMES}
+              value={(BYO_TIMES.find((o) => o.value === prefs.timeControl.byoSec)?.value ?? 0) as (typeof BYO_TIMES)[number]['value']}
+              onChange={(v) => set({ timeControl: { ...prefs.timeControl, byoSec: v, periods: v > 0 ? BYO_PERIODS : 0 } })}
+              label="秒読み"
             />
           </div>
         </div>
@@ -88,6 +100,12 @@ export const SettingsScreen: React.FC<Props> = ({ prefs, onChange }) => {
             <span>
               エンジン
               <span className="sensei-muted block">{engineModelName ?? '未読み込み'}{engineBackend ? ` · ${engineBackend}` : ''}</span>
+            </span>
+          </div>
+          <div className="sensei-row">
+            <span>
+              効果音
+              <span className="sensei-muted block">碁石の音は KaTrain（MIT）より。録音: Jordan Seaward、Funkenschlag1</span>
             </span>
           </div>
           <div className="sensei-row">

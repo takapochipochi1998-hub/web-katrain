@@ -43,10 +43,8 @@ describe('GameStore passTurn AI behavior', () => {
     store.passTurn();
     expect(makeAiMoveSpy).not.toHaveBeenCalled();
 
-    vi.advanceTimersByTime(499);
-    expect(makeAiMoveSpy).not.toHaveBeenCalled();
-
-    vi.advanceTimersByTime(1);
+    // The reply is scheduled with no artificial pause: on the next timer tick.
+    vi.advanceTimersByTime(0);
     expect(makeAiMoveSpy).toHaveBeenCalledTimes(1);
 
     useGameStore.setState({ makeAiMove: originalMakeAiMove });

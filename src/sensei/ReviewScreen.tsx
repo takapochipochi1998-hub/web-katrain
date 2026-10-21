@@ -19,6 +19,7 @@ import { resultLabel } from './gameResult';
 import { pointLabel } from './coords';
 import { explainMove, factsForMove } from './explain';
 import { Header, Segmented, Switch } from './ui';
+import { useNarrow } from './useNarrow';
 import { RankPicker } from './RankPicker';
 import { humanProfileFor, rankLabel, type Rank } from './rankLadder';
 
@@ -87,6 +88,7 @@ export const ReviewScreen: React.FC<Props> = ({ title, playerRank, onPlayerRankC
   const katagoVisits = useGameStore((s) => s.settings.katagoVisits);
   const humanSlEnabled = useGameStore((s) => s.settings.humanSlEnabled);
 
+  const narrow = useNarrow();
   const [autoReply, setAutoReply] = useState(true);
   const [explanation, setExplanation] = useState<{ nodeId: string; text: string } | null>(null);
   const [explaining, setExplaining] = useState<string | null>(null);
@@ -217,7 +219,7 @@ export const ReviewScreen: React.FC<Props> = ({ title, playerRank, onPlayerRankC
       />
       <div className="sensei-game">
         <div className="sensei-board-wrap">
-          <SenseiBoard board={board} lastMove={lastMove} markers={markers} onTap={tryMove} />
+          <SenseiBoard board={board} lastMove={lastMove} markers={markers} dragPlayer={currentNode.gameState.currentPlayer} showCoords={!narrow} onTap={tryMove} />
         </div>
         <div className="sensei-side">
           <div className="sensei-nav-buttons">

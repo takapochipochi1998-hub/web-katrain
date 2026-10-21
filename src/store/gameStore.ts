@@ -324,6 +324,8 @@ const OLD_DEFAULT_KATAGO_VISITS = 500;
 const SETTINGS_REVISION_FIELD = 'settingsRevision';
 const SETTINGS_REVISION = 1;
 export const DEFAULT_KATAGO_VISITS = 5000;
+/** No artificial pause before the bot answers: it only made the bot feel slow. */
+const AI_REPLY_DELAY_MS = 0;
 
 const normalizeModelUrl = (value: unknown): string | null => {
   if (typeof value !== 'string') return null;
@@ -4464,7 +4466,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
        lastPlayedNodeId = existingChild.id;
        const after = get();
        if (after.isAiPlaying && after.currentPlayer === after.aiColor) {
-         get().scheduleAiMove(500);
+         get().scheduleAiMove(AI_REPLY_DELAY_MS);
        }
        if (after.isAnalysisMode && !after.isSelfplayToEnd) {
          scheduleAnalysis(() => void get().runAnalysis({ ifIdle: true }), 500);
@@ -4569,7 +4571,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!isLoad) {
       const newState = get();
       if (newState.isAiPlaying && newState.currentPlayer === newState.aiColor) {
-        get().scheduleAiMove(500);
+        get().scheduleAiMove(AI_REPLY_DELAY_MS);
       }
 	      if (newState.isAnalysisMode && !newState.isSelfplayToEnd) {
 	          scheduleAnalysis(() => void get().runAnalysis({ ifIdle: true }), 500);
@@ -6784,7 +6786,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
            const ended = isPassMove(after.currentNode.move) && isPassMove(after.currentNode.parent?.move);
            if (ended) announceGameEnd(set);
            if (!ended && after.isAiPlaying && after.aiColor && after.currentPlayer === after.aiColor) {
-             after.scheduleAiMove(500);
+             after.scheduleAiMove(AI_REPLY_DELAY_MS);
            }
            if (after.isAnalysisMode && !after.isSelfplayToEnd) {
              scheduleAnalysis(() => void after.runAnalysis({ ifIdle: true }), 0);
@@ -6821,7 +6823,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const ended = isPassMove(after.currentNode.move) && isPassMove(after.currentNode.parent?.move);
       if (ended) announceGameEnd(set);
       if (!ended && after.isAiPlaying && after.aiColor && after.currentPlayer === after.aiColor) {
-        after.scheduleAiMove(500);
+        after.scheduleAiMove(AI_REPLY_DELAY_MS);
       }
       if (after.isAnalysisMode && !after.isSelfplayToEnd) scheduleAnalysis(() => void after.runAnalysis({ ifIdle: true }), 0);
   },

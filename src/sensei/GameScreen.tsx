@@ -4,10 +4,20 @@ import type { GameNode, Player } from '../types';
 import { SenseiBoard } from './SenseiBoard';
 import { outcomeFor, resultFromScoreLead, resultLabel } from './gameResult';
 import { rankLabel, recordResult, type RankBook, type RankedBoardSize } from './rankLadder';
-import { saveSession, type SessionMeta } from './session';
-import { Dialog, Header, Switch } from './ui';
+import { loseOnTime, saveSession, type SessionMeta } from './session';
+import { formatClock, hasClock, spendTime, viewClock } from './clock';
+import { Dialog, Header } from './ui';
+import { useNarrow } from './useNarrow';
 
 const isPass = (m: { x: number; y: number } | null | undefined) => !!m && m.x < 0;
+
+/** When the player's turn at each position began, and moves already charged to the clock. */
+const turnStarts = new WeakMap<GameNode, number>();
+const charged = new WeakSet<GameNode>();
+const turnStartFor = (node: GameNode): number => {
+  if (!turnStarts.has(node)) turnStarts.set(node, Date.now());
+  return turnStarts.get(node)!;
+};
 
 /**
  * The bot falls back to the engine's own move when the human net is missing;
@@ -24,7 +34,6 @@ type Props = {
   meta: SessionMeta;
   ranks: RankBook;
   confirmMoves: boolean;
-  showScoreByDefault: boolean;
   onRanksChange: (book: RankBook) => void;
   onMetaChange: (meta: SessionMeta) => void;
   onReplay: () => void;
@@ -33,19 +42,17 @@ type Props = {
 };
 
 /** Playing a game against the bot: the board, whose turn it is, pass and resign. */
-export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, showScoreByDefault, onRanksChange, onMetaChange, onReplay, onReview, onLeave }) => {
+export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanksChange, onMetaChange, onReplay, onReview, onLeave }) => {
   const board = useGameStore((s) => s.board);
   const currentNode = useGameStore((s) => s.currentNode);
   const currentPlayer = useGameStore((s) => s.currentPlayer);
   const isAiThinking = useGameStore((s) => s.isAiThinking);
   const capturedBlack = useGameStore((s) => s.capturedBlack);
   const capturedWhite = useGameStore((s) => s.capturedWhite);
-  const analysisData = useGameStore((s) => s.analysisData);
-  const isAnalysisMode = useGameStore((s) => s.isAnalysisMode);
   useGameStore((s) => s.treeVersion); // endState is written in place; re-render on tree changes.
 
+  const narrow = useNarrow();
   const [confirmResign, setConfirmResign] = useState(false);
-  const [showScore, setShowScore] = useState(showScoreByDefault);
   const [dismissedNodeId, setDismissedNodeId] = useState<string | null>(null);
   const [ghost, setGhost] = useState<{ x: number; y: number; nodeId: string } | null>(null);
   const countingNodeRef = useRef<string | null>(null);
@@ -59,6 +66,39 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, showSco
   const aiName = `AI ${rankLabel(meta.aiRank)}`;
   const offRank = playedOffRank(currentNode, meta.humanColor);
   const size = meta.size as RankedBoardSize;
+  // The player's clock: runs while it is their turn, charged when they move.
+  const tc = meta.timeControl;
+  const [now, setNow] = useState(() => Date.now());
+  const clockRunning = hasClock(tc) && !!meta.clock && humanToMove;
+  const elapsed = clockRunning ? Math.max(0, (now - turnStartFor(currentNode)) / 1000) : 0;
+  const clockView = hasClock(tc) && meta.clock ? viewClock(meta.clock, tc, elapsed) : null;
+
+  useEffect(() => {
+    if (!clockRunning || !tc || !meta.clock) return;
+    const clock = meta.clock;
+    const start = turnStartFor(currentNode);
+    const id = setInterval(() => {
+      const t = Date.now();
+      setNow(t);
+      if (viewClock(clock, tc, (t - start) / 1000).flagged) {
+        clearInterval(id);
+        loseOnTime(meta.humanColor);
+      }
+    }, 250);
+    return () => clearInterval(id);
+  }, [clockRunning, tc, meta.clock, meta.humanColor, currentNode]);
+
+  useEffect(() => {
+    const parent = currentNode.parent;
+    if (!hasClock(tc) || !meta.clock || !parent || currentNode.move?.player !== meta.humanColor || charged.has(currentNode)) return;
+    charged.add(currentNode);
+    const next = spendTime(meta.clock, tc, (Date.now() - turnStartFor(parent)) / 1000);
+    if (!next) return;
+    const updated = { ...meta, clock: next };
+    saveSession(updated);
+    onMetaChange(updated);
+  }, [currentNode, meta, tc, onMetaChange]);
+
   // A ghost belongs to the position it was placed on.
   const liveGhost = ghost && ghost.nodeId === currentNode.id && humanToMove ? ghost : null;
 
@@ -88,11 +128,11 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, showSco
     onMetaChange(updated);
   }, [ended, endState, meta, ranks, size, onRanksChange, onMetaChange, offRank]);
 
-  // "形勢を表示" needs the live analysis running while the game is on.
+  // Nothing reads the live analysis during play; keep the engine free for the bot.
   useEffect(() => {
-    if (ended || bothPassed) return;
-    if (showScore !== isAnalysisMode) useGameStore.getState().toggleAnalysisMode();
-  }, [showScore, isAnalysisMode, ended, bothPassed]);
+    const store = useGameStore.getState();
+    if (store.isAnalysisMode && !useGameStore.getState().currentNode.endState) store.toggleAnalysisMode();
+  }, []);
 
   const tap = (x: number, y: number) => {
     if (board[y]?.[x]) return;
@@ -106,7 +146,6 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, showSco
 
   const lastMove = currentNode.move && !isPass(currentNode.move) ? currentNode.move : null;
   const outcome = outcomeFor(endState, meta.humanColor);
-  const lead = analysisData?.rootScoreLead;
   const dialogOpen = ended && dismissedNodeId !== currentNode.id;
   const change = meta.kind === 'ranked' ? ranks[size].history.find((h) => h.at >= meta.startedAt) : undefined;
   const rankChange = change && change.before !== change.after
@@ -130,6 +169,12 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, showSco
     { color: 'black', name: meta.humanColor === 'black' ? 'あなた' : aiName, captures: capturedWhite },
     { color: 'white', name: meta.humanColor === 'white' ? 'あなた' : aiName, captures: capturedBlack },
   ];
+  const clockLabel = clockView
+    ? clockView.inByoyomi
+      ? `秒読み ${formatClock(clockView.secondsLeft)}（残り${clockView.periodsLeft}回）`
+      : `残り ${formatClock(clockView.secondsLeft)}`
+    : null;
+  const clockUrgent = !!clockView && clockRunning && (clockView.inByoyomi ? clockView.secondsLeft <= 10 : clockView.secondsLeft <= 30);
 
   return (
     <>
@@ -145,6 +190,8 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, showSco
             lastMove={lastMove}
             ghost={liveGhost ? { x: liveGhost.x, y: liveGhost.y, player: meta.humanColor } : null}
             disabled={!humanToMove}
+            dragPlayer={humanToMove ? meta.humanColor : null}
+            showCoords={!narrow}
             onTap={tap}
           />
         </div>
@@ -156,14 +203,14 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, showSco
                 <div className="min-w-0">
                   <div className="sensei-player-name">{p.name}</div>
                   <div className="sensei-player-sub">アゲハマ {p.captures}</div>
+                  {clockLabel && p.color === meta.humanColor && (
+                    <div className={`sensei-player-sub tabular-nums${clockUrgent ? ' sensei-clock-urgent' : ''}`}>{clockLabel}</div>
+                  )}
                 </div>
               </div>
             ))}
           </div>
           <div className="sensei-status" aria-live="polite">{status}</div>
-          {showScore && !ended && typeof lead === 'number' && (
-            <div className="sensei-muted text-center">形勢: {lead >= 0 ? '黒' : '白'}が{Math.abs(lead).toFixed(1)}目リード</div>
-          )}
           {!ended ? (
             <div className="sensei-actions">
               <button type="button" className="sensei-secondary" disabled={!humanToMove} onClick={() => { setGhost(null); useGameStore.getState().passTurn(); }}>パス</button>
@@ -173,14 +220,6 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, showSco
             <div className="sensei-actions">
               <button type="button" className="sensei-secondary" onClick={onReplay}>もう一度対局</button>
               <button type="button" className="sensei-primary" onClick={onReview}>検討する</button>
-            </div>
-          )}
-          {!ended && (
-            <div className="sensei-card">
-              <div className="sensei-row">
-                <span>形勢を表示</span>
-                <Switch checked={showScore} onChange={setShowScore} label="形勢を表示" />
-              </div>
             </div>
           )}
         </div>

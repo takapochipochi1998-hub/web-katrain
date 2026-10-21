@@ -1,3 +1,5 @@
+import { publicUrl } from './publicUrl';
+
 let audioCtx: AudioContext | null = null;
 type SoundEffectKey = 'stone' | 'capture' | 'pass' | 'new-game';
 
@@ -88,6 +90,7 @@ const getAudioContext = () => {
 
     try {
         audioCtx = new AudioContextCtor();
+        loadSamples(audioCtx);
         return audioCtx;
     } catch (error) {
         audioCtx = null;
@@ -220,9 +223,50 @@ const playKnock = (ctx: AudioContext, at: number, opts: { from: number; to: numb
 
 const vary = (value: number, spread: number) => value * (1 + (Math.random() * 2 - 1) * spread);
 
+/*
+ * Recorded stones from KaTrain (MIT): stone1-5.wav by Jordan Seaward and
+ * capturing.wav by "Funkenschlag1", see KaTrain's CONTRIBUTIONS.md. Fetched
+ * once per audio context; until they arrive (or if they cannot) the
+ * synthesised sounds below stand in.
+ */
+const STONE_SAMPLES = ['stone1', 'stone2', 'stone3', 'stone4', 'stone5'];
+let stoneBuffers: AudioBuffer[] = [];
+let captureBuffer: AudioBuffer | null = null;
+
+function loadSamples(ctx: AudioContext): void {
+    if (typeof fetch !== 'function' || typeof ctx.decodeAudioData !== 'function') return;
+    const load = async (name: string): Promise<AudioBuffer | null> => {
+        try {
+            const res = await fetch(publicUrl(`sounds/${name}.wav`));
+            if (!res.ok) return null;
+            return await ctx.decodeAudioData(await res.arrayBuffer());
+        } catch {
+            return null;
+        }
+    };
+    void Promise.all(STONE_SAMPLES.map(load)).then((buffers) => {
+        stoneBuffers = buffers.filter((b): b is AudioBuffer => b !== null);
+    });
+    void load('capturing').then((buffer) => { captureBuffer = buffer; });
+}
+
+const playSample = (ctx: AudioContext, buffer: AudioBuffer, at: number, gain = 1): void => {
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    const level = ctx.createGain();
+    level.gain.setValueAtTime(gain, at);
+    source.connect(level);
+    level.connect(ctx.destination);
+    source.start(at);
+};
+
 export const playStoneSound = () => {
     runSound('stone', (ctx) => {
         const now = ctx.currentTime;
+        if (stoneBuffers.length > 0) {
+            playSample(ctx, stoneBuffers[Math.floor(Math.random() * stoneBuffers.length)]!, now);
+            return;
+        }
         playKnock(ctx, now, { from: vary(320, 0.08), to: 140, gain: 0.55, decay: 0.075 });
         playClick(ctx, now, { freq: vary(3200, 0.12), q: 1.4, gain: 0.9, decay: 0.035 });
         playClick(ctx, now + 0.002, { freq: vary(1300, 0.1), q: 2.5, gain: 0.35, decay: 0.06 });
@@ -231,6 +275,10 @@ export const playStoneSound = () => {
 
 export const playCaptureSound = (count: number) => {
     runSound('capture', (ctx) => {
+        if (captureBuffer) {
+            playSample(ctx, captureBuffer, ctx.currentTime + 0.1, 0.8);
+            return;
+        }
         // Prisoners lifted off the board and dropped together: light stone-on-stone clicks.
         const clicks = Math.min(Math.max(count, 1), 5) + 1;
         const now = ctx.currentTime + 0.12;
@@ -263,6 +311,8 @@ export const playNewGameSound = () => {
 
 export const resetAudioContextForTests = (): void => {
     audioCtx = null;
+    stoneBuffers = [];
+    captureBuffer = null;
     onSoundInitError = null;
     resetSoundFailureReport();
 };

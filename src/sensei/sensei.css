@@ -276,3 +276,23 @@
   .sensei-app *, .sensei-app *::before, .sensei-app *::after { transition: none; animation: none; }
   .sensei-app button:active:not(:disabled) { transform: none; }
 }
+
+/* Board layers: the wood is drawn once underneath; stones and lines on top. */
+.sensei-board { position: relative; overflow: hidden; }
+.sensei-board-wood { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.sensei-board-svg { position: relative; display: block; width: 100%; height: 100%; touch-action: none; }
+
+/*
+ * Phones: nothing follows the scroll, and a game or review gets the whole
+ * screen. The header scrolls away, the tab bar is hidden (the header's back
+ * button leads out), and the board runs edge to edge.
+ */
+@media (max-width: 899px) {
+  .sensei-header { position: static; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .sensei-app.is-immersive .sensei-tabbar { display: none; }
+  .sensei-app.is-immersive .sensei-main { padding-bottom: env(safe-area-inset-bottom); }
+  .sensei-app.is-immersive .sensei-board-wrap { padding: 4px 0; }
+  .sensei-app.is-immersive .sensei-board { max-width: 100%; border-radius: 4px; }
+  .sensei-app.is-immersive .sensei-toast { bottom: calc(16px + env(safe-area-inset-bottom)); }
+}
+.sensei-clock-urgent { color: var(--s-bad); font-weight: 700; }

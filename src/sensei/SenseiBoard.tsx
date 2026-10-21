@@ -1,4 +1,4 @@
-import React, { useId } from 'react';
+import React, { memo, useId, useState } from 'react';
 import type { BoardState, Player } from '../types';
 import { kanjiRow } from './coords';
 
@@ -18,6 +18,14 @@ type Props = {
   markers?: BoardMarker[];
   /** A see-through stone: the move waiting for a second tap to confirm. */
   ghost?: { x: number; y: number; player: Player } | null;
+  /**
+   * While a finger (or button) is down, show a cross through the point under
+   * it and a see-through stone of this colour; the move lands where it lifts.
+   * The lines reach the board's edges, so they stay visible past the finger.
+   */
+  dragPlayer?: Player | null;
+  /** Coordinates along the edges; phones leave them off to give the board room. */
+  showCoords?: boolean;
   onTap?: (x: number, y: number) => void;
   disabled?: boolean;
 };
@@ -29,116 +37,192 @@ const STAR_POINTS: Record<number, number[]> = {
 };
 
 const CELL = 40;
-const MARGIN = 32;
+const R = CELL * 0.48;
+const LINE = '#4b3518';
 
 /** Board in Japanese coordinates: 1… across the top, 一… down the side. */
-export const SenseiBoard: React.FC<Props> = ({ board, lastMove, markers = [], ghost, onTap, disabled }) => {
+export const SenseiBoard: React.FC<Props> = ({ board, lastMove, markers = [], ghost, dragPlayer, showCoords = true, onTap, disabled }) => {
   const uid = useId().replace(/:/g, '');
+  const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
   const size = board.length;
-  const span = CELL * (size - 1);
-  const total = span + MARGIN * 2;
-  const at = (i: number) => MARGIN + i * CELL;
+  const margin = showCoords ? 32 : CELL * 0.62;
+  const total = CELL * (size - 1) + margin * 2;
+  const at = (i: number) => margin + i * CELL;
   const stars = STAR_POINTS[size] ?? [];
-  const r = CELL * 0.48;
 
   const pointFromEvent = (e: React.PointerEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const scale = total / rect.width;
-    const x = Math.round(((e.clientX - rect.left) * scale - MARGIN) / CELL);
-    const y = Math.round(((e.clientY - rect.top) * scale - MARGIN) / CELL);
+    const x = Math.round(((e.clientX - rect.left) * scale - margin) / CELL);
+    const y = Math.round(((e.clientY - rect.top) * scale - margin) / CELL);
     return x >= 0 && y >= 0 && x < size && y < size ? { x, y } : null;
   };
 
-  const stone = (x: number, y: number, player: Player, opacity = 1, key?: string) => (
-    <circle
-      key={key}
-      cx={at(x)}
-      cy={at(y)}
-      r={r}
-      fill={`url(#${uid}-${player})`}
-      filter={opacity === 1 ? `url(#${uid}-shadow)` : undefined}
-      opacity={opacity}
-    />
-  );
+  const guiding = !disabled && !!dragPlayer;
+  const shownGhost = drag && dragPlayer && !board[drag.y]?.[drag.x] ? { ...drag, player: dragPlayer } : ghost;
 
   return (
-    <svg
-      viewBox={`0 0 ${total} ${total}`}
-      className="sensei-board"
-      role="img"
-      aria-label="碁盤"
-      onPointerUp={(e) => {
-        if (disabled || !onTap) return;
-        const p = pointFromEvent(e);
-        if (p) onTap(p.x, p.y);
-      }}
-    >
-      <defs>
-        <linearGradient id={`${uid}-wood`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#ecc987" />
-          <stop offset="55%" stopColor="#dfb36a" />
-          <stop offset="100%" stopColor="#d4a35a" />
-        </linearGradient>
-        <radialGradient id={`${uid}-black`} cx="35%" cy="30%" r="70%">
-          <stop offset="0%" stopColor="#6a6a6a" />
-          <stop offset="45%" stopColor="#1c1c1c" />
-          <stop offset="100%" stopColor="#000" />
-        </radialGradient>
-        <radialGradient id={`${uid}-white`} cx="35%" cy="30%" r="75%">
-          <stop offset="0%" stopColor="#ffffff" />
-          <stop offset="70%" stopColor="#ebe8e2" />
-          <stop offset="100%" stopColor="#c9c5bd" />
-        </radialGradient>
-        <filter id={`${uid}-shadow`} x="-30%" y="-30%" width="160%" height="160%">
-          <feDropShadow dx="1.2" dy="1.8" stdDeviation="1.4" floodColor="#000" floodOpacity="0.35" />
-        </filter>
-      </defs>
-      <rect width={total} height={total} fill={`url(#${uid}-wood)`} />
-      <g stroke="#5a4220" strokeWidth={1} strokeLinecap="square">
-        {Array.from({ length: size }, (_, i) => (
-          <g key={i}>
-            <line x1={at(0)} y1={at(i)} x2={at(size - 1)} y2={at(i)} strokeWidth={i === 0 || i === size - 1 ? 1.8 : 1} />
-            <line x1={at(i)} y1={at(0)} x2={at(i)} y2={at(size - 1)} strokeWidth={i === 0 || i === size - 1 ? 1.8 : 1} />
+    <div className="sensei-board" style={{ aspectRatio: '1 / 1' }}>
+      <WoodLayer />
+      <svg
+        viewBox={`0 0 ${total} ${total}`}
+        className="sensei-board-svg"
+        role="img"
+        aria-label="碁盤"
+        onPointerDown={(e) => {
+          if (!guiding) return;
+          e.currentTarget.setPointerCapture?.(e.pointerId);
+          setDrag(pointFromEvent(e));
+        }}
+        onPointerMove={(e) => { if (drag || (guiding && e.buttons)) setDrag(pointFromEvent(e)); }}
+        onPointerCancel={() => setDrag(null)}
+        onPointerUp={(e) => {
+          const p = pointFromEvent(e);
+          setDrag(null);
+          if (disabled || !onTap || !p) return;
+          onTap(p.x, p.y);
+        }}
+      >
+        <defs>
+          <radialGradient id={`${uid}-black`} cx="38%" cy="32%" r="72%">
+            <stop offset="0%" stopColor="#5a5a5c" />
+            <stop offset="35%" stopColor="#262628" />
+            <stop offset="80%" stopColor="#0b0b0c" />
+            <stop offset="100%" stopColor="#000" />
+          </radialGradient>
+          <radialGradient id={`${uid}-white`} cx="38%" cy="32%" r="75%">
+            <stop offset="0%" stopColor="#ffffff" />
+            <stop offset="60%" stopColor="#f1eee7" />
+            <stop offset="92%" stopColor="#d9d3c8" />
+            <stop offset="100%" stopColor="#c4bdb0" />
+          </radialGradient>
+          <radialGradient id={`${uid}-shine`} cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#fff" stopOpacity="0.55" />
+            <stop offset="100%" stopColor="#fff" stopOpacity="0" />
+          </radialGradient>
+          <radialGradient id={`${uid}-shadow`} cx="50%" cy="50%" r="50%">
+            <stop offset="55%" stopColor="#000" stopOpacity="0.38" />
+            <stop offset="100%" stopColor="#000" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+
+        <g stroke={LINE} strokeLinecap="square">
+          {Array.from({ length: size }, (_, i) => {
+            const edge = i === 0 || i === size - 1;
+            return (
+              <g key={i} strokeWidth={edge ? 1.8 : 0.95}>
+                <line x1={at(0)} y1={at(i)} x2={at(size - 1)} y2={at(i)} />
+                <line x1={at(i)} y1={at(0)} x2={at(i)} y2={at(size - 1)} />
+              </g>
+            );
+          })}
+        </g>
+        {showCoords && (
+          <g fill={LINE} fontSize={12} fontWeight={600} textAnchor="middle" opacity={0.7}>
+            {Array.from({ length: size }, (_, i) => (
+              <g key={i}>
+                <text x={at(i)} y={margin / 2 + 4}>{i + 1}</text>
+                <text x={margin / 2 - 2} y={at(i) + 4} fontSize={i >= 9 ? 9 : 12}>{kanjiRow(i)}</text>
+              </g>
+            ))}
           </g>
-        ))}
-      </g>
-      <g fill="#5a4220" fontSize={12} fontWeight={600} textAnchor="middle" opacity={0.75}>
-        {Array.from({ length: size }, (_, i) => (
-          <g key={i}>
-            <text x={at(i)} y={MARGIN / 2 + 4}>{i + 1}</text>
-            <text x={MARGIN / 2 - 2} y={at(i) + 4} fontSize={i >= 9 ? 9 : 12}>{kanjiRow(i)}</text>
+        )}
+        {stars.flatMap((sy) => stars.map((sx) => (
+          <circle key={`${sx}-${sy}`} cx={at(sx)} cy={at(sy)} r={3.6} fill={LINE} />
+        )))}
+
+        {drag && guiding && (
+          <g pointerEvents="none" stroke="#d2333f" strokeWidth={1.6} opacity={0.85}>
+            <line x1={at(0)} y1={at(drag.y)} x2={at(size - 1)} y2={at(drag.y)} />
+            <line x1={at(drag.x)} y1={at(0)} x2={at(drag.x)} y2={at(size - 1)} />
           </g>
-        ))}
-      </g>
-      {stars.flatMap((sy) => stars.map((sx) => (
-        <circle key={`${sx}-${sy}`} cx={at(sx)} cy={at(sy)} r={3.6} fill="#5a4220" />
-      )))}
-      {board.flatMap((row, y) => row.map((s, x) => s && stone(x, y, s, 1, `s${x}-${y}`)))}
-      {ghost && !board[ghost.y]?.[ghost.x] && stone(ghost.x, ghost.y, ghost.player, 0.55)}
-      {lastMove && board[lastMove.y]?.[lastMove.x] && (
-        <circle
-          cx={at(lastMove.x)}
-          cy={at(lastMove.y)}
-          r={CELL * 0.18}
-          fill="none"
-          stroke={board[lastMove.y]![lastMove.x] === 'black' ? '#fff' : '#111'}
-          strokeWidth={2.4}
-        />
-      )}
-      {markers.map((m) => {
-        const onStone = board[m.y]?.[m.x];
-        const color = m.textColor ?? (onStone === 'black' ? '#fff' : '#111');
-        return (
-          <g key={`m${m.x}-${m.y}`} pointerEvents="none">
-            {m.fill && <circle cx={at(m.x)} cy={at(m.y)} r={CELL * 0.4} fill={m.fill} stroke="#fff" strokeWidth={1.5} />}
-            {m.label && (
-              <text x={at(m.x)} y={at(m.y) + 6} textAnchor="middle" fontSize={m.label.length > 2 ? 13 : 17} fontWeight={800} fill={color}>
-                {m.label}
-              </text>
-            )}
+        )}
+
+        {board.flatMap((row, y) => row.map((s, x) => s && (
+          <Stone key={`s${x}-${y}`} uid={uid} cx={at(x)} cy={at(y)} player={s} variant={(x * 7 + y * 3) % 3} />
+        )))}
+        {shownGhost && !board[shownGhost.y]?.[shownGhost.x] && (
+          <g opacity={0.55} pointerEvents="none">
+            <Stone uid={uid} cx={at(shownGhost.x)} cy={at(shownGhost.y)} player={shownGhost.player} variant={0} flat />
           </g>
-        );
-      })}
-    </svg>
+        )}
+        {lastMove && board[lastMove.y]?.[lastMove.x] && (
+          <circle
+            cx={at(lastMove.x)}
+            cy={at(lastMove.y)}
+            r={CELL * 0.17}
+            fill="none"
+            stroke={board[lastMove.y]![lastMove.x] === 'black' ? '#f4f1ea' : '#1a1a1a'}
+            strokeWidth={2.4}
+          />
+        )}
+        {markers.map((m) => {
+          const onStone = board[m.y]?.[m.x];
+          const color = m.textColor ?? (onStone === 'black' ? '#fff' : '#111');
+          return (
+            <g key={`m${m.x}-${m.y}`} pointerEvents="none">
+              {m.fill && <circle cx={at(m.x)} cy={at(m.y)} r={CELL * 0.4} fill={m.fill} stroke="#fff" strokeWidth={1.5} />}
+              {m.label && (
+                <text x={at(m.x)} y={at(m.y) + 6} textAnchor="middle" fontSize={m.label.length > 2 ? 13 : 17} fontWeight={800} fill={color}>
+                  {m.label}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
   );
 };
+
+/** One stone: a soft shadow, the body, a highlight, and shell lines on white. */
+const Stone: React.FC<{ uid: string; cx: number; cy: number; player: Player; variant: number; flat?: boolean }> = ({ uid, cx, cy, player, variant, flat }) => (
+  <g pointerEvents="none">
+    {!flat && <circle cx={cx + R * 0.1} cy={cy + R * 0.16} r={R * 1.08} fill={`url(#${uid}-shadow)`} />}
+    <circle cx={cx} cy={cy} r={R} fill={`url(#${uid}-${player})`} />
+    {player === 'white' && <ShellLines cx={cx} cy={cy} angle={[-18, 8, 27][variant] ?? 0} />}
+    <ellipse cx={cx - R * 0.32} cy={cy - R * 0.38} rx={R * 0.42} ry={R * 0.26} fill={`url(#${uid}-shine)`} opacity={player === 'black' ? 0.5 : 0.8} transform={`rotate(-30 ${cx - R * 0.32} ${cy - R * 0.38})`} />
+  </g>
+);
+
+/** Clamshell stones: faint, slightly uneven growth lines across the face. */
+const SHELL_OFFSETS = [-0.62, -0.4, -0.2, 0.02, 0.22, 0.43, 0.63];
+const ShellLines: React.FC<{ cx: number; cy: number; angle: number }> = ({ cx, cy, angle }) => (
+  <g transform={`rotate(${angle} ${cx} ${cy})`} stroke="#b4ac9d" strokeWidth={0.5} strokeOpacity={0.5}>
+    {SHELL_OFFSETS.map((o) => {
+      const d = o * R;
+      const half = Math.sqrt(R * R - d * d) * 0.9;
+      return <line key={o} x1={cx - half} y1={cy + d} x2={cx + half} y2={cy + d} />;
+    })}
+  </g>
+);
+
+/**
+ * The kaya board: straight grain from layered noise. Drawn once and kept apart
+ * from the stones so moves do not repaint the (comparatively costly) filter.
+ */
+const WoodLayer = memo(function WoodLayer() {
+  const uid = useId().replace(/:/g, '');
+  return (
+    <svg className="sensei-board-wood" viewBox="0 0 400 400" preserveAspectRatio="none" aria-hidden>
+      <defs>
+        <linearGradient id={`${uid}-base`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#efcc8a" />
+          <stop offset="50%" stopColor="#e2b56c" />
+          <stop offset="100%" stopColor="#d6a75c" />
+        </linearGradient>
+        <filter id={`${uid}-grain`} x="0" y="0" width="100%" height="100%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.085 0.0035" numOctaves="3" seed="11" />
+          <feColorMatrix type="matrix" values="0 0 0 0 0.42  0 0 0 0 0.25  0 0 0 0 0.08  0 0 0 1.6 -0.7" />
+        </filter>
+        <filter id={`${uid}-fibre`} x="0" y="0" width="100%" height="100%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.9 0.02" numOctaves="2" seed="4" />
+          <feColorMatrix type="matrix" values="0 0 0 0 0.5  0 0 0 0 0.3  0 0 0 0 0.1  0 0 0 0.9 -0.42" />
+        </filter>
+      </defs>
+      <rect width="400" height="400" fill={`url(#${uid}-base)`} />
+      <rect width="400" height="400" filter={`url(#${uid}-grain)`} opacity={0.55} />
+      <rect width="400" height="400" filter={`url(#${uid}-fibre)`} opacity={0.35} />
+    </svg>
+  );
+});

@@ -81,7 +81,7 @@ const PRECACHE_REQUIRED = ['./', './index.html'];
 const isSameOrigin = (url) => url.origin === self.location.origin;
 
 const isCacheFirstAsset = (url) =>
-  /\.(?:png|jpg|jpeg|webp|svg|gif|wasm|bin|gz|woff2?)$/i.test(url.pathname) ||
+  /\.(?:png|jpg|jpeg|webp|svg|gif|wasm|bin|gz|woff2?|wav)$/i.test(url.pathname) ||
   url.pathname.includes('/models/') ||
   url.pathname.includes('/tfjs/') ||
   url.pathname.includes('/themes/') ||

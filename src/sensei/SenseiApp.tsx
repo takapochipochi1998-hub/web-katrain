@@ -121,7 +121,7 @@ export const SenseiApp: React.FC = () => {
 
   const begin = (config: GameConfig) => {
     setLastConfig(config);
-    setMeta(startGame(config));
+    setMeta(startGame({ ...config, timeControl: prefs.timeControl }));
     setView('game');
   };
 
@@ -194,7 +194,6 @@ export const SenseiApp: React.FC = () => {
         meta={meta}
         ranks={ranks}
         confirmMoves={prefs.confirmMoves}
-        showScoreByDefault={prefs.showScoreInGame}
         onRanksChange={updateRanks}
         onMetaChange={setMeta}
         onReplay={replay}
@@ -250,7 +249,7 @@ export const SenseiApp: React.FC = () => {
   }
 
   return (
-    <div className="sensei-app">
+    <div className={`sensei-app${view ? ' is-immersive' : ''}`}>
       <div className="sensei-shell">
         <nav className="sensei-tabbar" aria-label="メインメニュー">
           {TABS.map((t) => (
