@@ -284,7 +284,7 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, geminiApiKey, gemini
           <div className="sensei-card sensei-stack">
             <div className="sensei-row">
             <span>
-              地を表示
+              地合いを表示
               {/* Always one line here, so turning it on does not move what is below. */}
               <span className="sensei-muted block">
                 {territory
@@ -292,7 +292,7 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, geminiApiKey, gemini
                   : 'AIが見込む陣地を盤に表示'}
               </span>
             </span>
-            <Switch checked={showTerritory} onChange={toggleTerritory} label="地を表示" />
+            <Switch checked={showTerritory} onChange={toggleTerritory} label="地合いを表示" />
           </div>
             <div className="sensei-row">
               <span>読みの深さ</span>
