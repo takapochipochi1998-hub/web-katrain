@@ -70,4 +70,19 @@ export function scoreSeries(line: readonly GameNode[]): Array<number | null> {
 }
 
 /** Candidate letters A, B, C… for the engine's top moves. */
-export const candidateLetter = (index: number): string => String.fromCharCode(65 + index);
+export const candidateLabel = (index: number): string => String(index + 1);
+
+/** Points lost at which a candidate is drawn at its palest. */
+const PALEST_AT = 5;
+
+/**
+ * One colour for every candidate, deeper the better: the best move is solid,
+ * and the more a move gives away the paler it gets.
+ */
+export function candidateShade(pointsLost: number): { fill: string; text: string; alpha: number } {
+  const t = Math.min(1, Math.max(0, pointsLost) / PALEST_AT);
+  const alpha = Math.round((1 - 0.78 * t) * 100) / 100;
+  // Mixed toward a pale blue rather than made see-through, so grid lines stay hidden behind the number.
+  const mix = (deep: number, pale: number) => Math.round(pale + (deep - pale) * alpha);
+  return { fill: `rgb(${mix(36, 226)}, ${mix(84, 233)}, ${mix(200, 248)})`, text: alpha >= 0.5 ? '#ffffff' : '#173a8f', alpha };
+}

@@ -11,6 +11,8 @@ export type BoardMarker = {
   /** Fill of the disc behind the label; omit for a bare label. */
   fill?: string;
   textColor?: string;
+  /** A ring around the point, in this colour: the move actually played. */
+  ring?: string;
 };
 
 type Props = {
@@ -163,6 +165,7 @@ export const SenseiBoard: React.FC<Props> = ({ board, lastMove, markers = [], gh
           return (
             <g key={`m${m.x}-${m.y}`} pointerEvents="none">
               {m.fill && <circle cx={at(m.x)} cy={at(m.y)} r={CELL * 0.4} fill={m.fill} stroke="#fff" strokeWidth={1.5} />}
+              {m.ring && <circle cx={at(m.x)} cy={at(m.y)} r={CELL * 0.47} fill="none" stroke={m.ring} strokeWidth={3.2} />}
               {m.label && (
                 <text x={at(m.x)} y={at(m.y) + 6} textAnchor="middle" fontSize={m.label.length > 2 ? 13 : 17} fontWeight={800} fill={color}>
                   {m.label}

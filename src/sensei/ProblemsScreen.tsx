@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { SenseiBoard, type BoardMarker } from './SenseiBoard';
-import { candidateLetter } from './reviewModel';
+import { candidateLabel, candidateShade } from './reviewModel';
 import { isCorrect, nextProblem, type Problem } from './problems';
 import { Dialog, Header } from './ui';
 import { useNarrow } from './useNarrow';
@@ -56,7 +56,7 @@ export const ProblemsScreen: React.FC<Props> = ({ problems, onAttempt, onDelete 
   const answered = attempt && attempt.problemId === problem.id ? attempt : null;
   const markers: BoardMarker[] = answered
     ? [
-        ...problem.answers.map((a, i) => ({ x: a.x, y: a.y, label: candidateLetter(i), fill: i === 0 ? '#2f5bd3' : '#3f9a63', textColor: '#fff' })),
+        ...problem.answers.map((a, i) => { const shade = candidateShade(i === 0 ? 0 : 0.5); return { x: a.x, y: a.y, label: candidateLabel(i), fill: shade.fill, textColor: shade.text }; }),
         ...(problem.played && !isCorrect(problem, problem.played.x, problem.played.y)
           ? [{ x: problem.played.x, y: problem.played.y, label: '実', fill: '#d97b20', textColor: '#fff' }]
           : []),
@@ -95,7 +95,7 @@ export const ProblemsScreen: React.FC<Props> = ({ problems, onAttempt, onDelete 
           </div>
           {answered && (
             <p className="sensei-muted text-center">
-              A がAIの最善手{problem.answers.length > 1 ? `、${problem.answers.slice(1).map((_, i) => candidateLetter(i + 1)).join('・')} もほぼ同じ価値` : ''}です。
+              1 がAIの最善手{problem.answers.length > 1 ? `、${problem.answers.slice(1).map((_, i) => candidateLabel(i + 1)).join('・')} もほぼ同じ価値` : ''}です。
               {problem.played && !isCorrect(problem, problem.played.x, problem.played.y) ? '「実」は実戦で打った手です。' : ''}
             </p>
           )}

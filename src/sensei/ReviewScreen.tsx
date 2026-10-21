@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useGameStore } from '../store/gameStore';
-import type { GameNode } from '../types';
+import type { GameNode, Player } from '../types';
 import { SenseiBoard, type BoardMarker } from './SenseiBoard';
 import { ScoreGraph } from './ScoreGraph';
 import { MOVE_QUALITY_LABEL, type MoveQuality } from './moveQuality';
 import {
   branchPoint,
-  candidateLetter,
+  candidateLabel,
+  candidateShade,
   isMistake,
   isOnMainLine,
   judgeLine,
@@ -72,10 +73,12 @@ type Props = {
   onAddProblem: (node: GameNode) => void;
   onPlayFromHere: (node: GameNode) => void;
   onOpenSettings: () => void;
+  /** The player's colour in a game against the bot; mistakes are then only theirs. */
+  humanColor?: Player | null;
 };
 
 /** Reviewing a finished game: mistakes, candidates, the score graph and try-outs. */
-export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, geminiApiKey, geminiModel, onNavigate, onAddProblem, onPlayFromHere, onOpenSettings }) => {
+export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, geminiApiKey, geminiModel, onNavigate, onAddProblem, onPlayFromHere, onOpenSettings, humanColor }) => {
   const rootNode = useGameStore((s) => s.rootNode);
   const currentNode = useGameStore((s) => s.currentNode);
   const board = useGameStore((s) => s.board);
@@ -109,9 +112,11 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
   useEffect(() => {
     const store = useGameStore.getState();
     const profile = humanProfileFor(playerRank);
-    if (!store.settings.humanSlEnabled || store.settings.humanSlProfile !== profile) {
-      store.updateSettings({ humanSlEnabled: true, humanSlProfile: profile });
-    }
+    const patch: Partial<typeof store.settings> = {};
+    if (!store.settings.humanSlEnabled || store.settings.humanSlProfile !== profile) Object.assign(patch, { humanSlEnabled: true, humanSlProfile: profile });
+    // A depth set elsewhere (not one of the three here) would show one choice and use another.
+    if (!DEPTHS.some((d) => d.value === store.settings.katagoVisits)) patch.katagoVisits = 1000;
+    if (Object.keys(patch).length > 0) store.updateSettings(patch);
     refreshAnalysis();
   }, [playerRank]);
 
@@ -128,6 +133,9 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
   const series = useMemo(() => scoreSeries(line), [line, treeVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onMain = isOnMainLine(currentNode);
+  // Moves on the board now, try-outs included.
+  let moveDepth = 0;
+  for (let n = currentNode; n.parent; n = n.parent) moveDepth++;
   const anchor = branchPoint(currentNode);
   const anchorIndex = line.indexOf(anchor);
   const result = line[line.length - 1]?.endState ?? rootNode.properties?.RE?.[0] ?? null;
@@ -154,7 +162,18 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
 
   // analysisData is the live (still deepening) analysis of the current node.
   const analysis = analysisData ?? currentNode.analysis ?? null;
-  const candidates = (analysis?.moves ?? []).filter((m) => m.x >= 0).slice(0, 10);
+  // Moves the search barely looked at have unreliable values; leave them out.
+  const rootVisits = analysis?.rootVisits ?? 0;
+  // The engine's choice first, then the rest from the smallest loss up.
+  const lossOf = (m: { relativePointsLost?: number; pointsLost: number }) => Math.max(0, m.relativePointsLost ?? m.pointsLost);
+  // Losses are against the engine's best move, a pass included; numbered from the smallest loss up.
+  const allMoves = analysis?.moves ?? [];
+  const bestIsPass = allMoves[0]?.x === -1 && allMoves[0].y === -1;
+  const candidates = allMoves
+    .filter((m, i) => m.x >= 0 && (i === 0 || m.visits >= Math.max(2, rootVisits * 0.01)))
+    .sort((a, b) => lossOf(a) - lossOf(b) || (b === allMoves[0] ? 1 : 0) - (a === allMoves[0] ? 1 : 0))
+    .slice(0, 10);
+  const isBest = (m: (typeof candidates)[number]) => m === allMoves[0];
 
   // Try-out auto reply: answer each of the player's try-out moves with the engine's best.
   useEffect(() => {
@@ -179,7 +198,7 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
   };
 
   const goTo = (node: GameNode | undefined) => { if (node) useGameStore.getState().jumpToNode(node); };
-  const mistakes = verdicts.filter(isMistake);
+  const mistakes = verdicts.filter((v) => isMistake(v) && (!humanColor || v.player === humanColor));
   const nextMistake = mistakes.find((v) => v.moveNumber > anchorIndex + 1);
   const prevMistake = [...mistakes].reverse().find((v) => v.moveNumber < anchorIndex + 1);
 
@@ -199,13 +218,18 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
     }
   };
 
-  const markers: BoardMarker[] = candidates.map((m, i) => ({
-    x: m.x,
-    y: m.y,
-    label: candidateLetter(i),
-    fill: i === 0 ? '#2f5bd3' : '#3f9a63',
-    textColor: '#fff',
-  }));
+  const markers: BoardMarker[] = candidates.map((m, i) => {
+    const shade = candidateShade(lossOf(m));
+    return { x: m.x, y: m.y, label: candidateLabel(i), fill: shade.fill, textColor: shade.text };
+  });
+  // The move actually played next, ringed in its verdict's colour.
+  const played = onMain && judgedMove && judgedMove.x >= 0 && !(judged?.quality === 'best') ? judgedMove : null;
+  if (played) {
+    const ring = judged?.quality ? QUALITY_COLOR[judged.quality] : '#d2333f';
+    const hit = markers.find((m) => m.x === played.x && m.y === played.y);
+    if (hit) hit.ring = ring;
+    else markers.push({ x: played.x, y: played.y, ring });
+  }
   const lastMove = currentNode.move && !isPass(currentNode.move) ? currentNode.move : null;
   const shownExplanation = explanation && explainNode && explanation.nodeId === explainNode.id ? explanation.text : null;
 
@@ -214,7 +238,7 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
       <Header
         title="検討"
         left={<NavMenu onNavigate={onNavigate} />}
-        right={<span className="sensei-muted">{anchorIndex}手目</span>}
+        right={<span className="sensei-muted">{moveDepth}手目</span>}
       />
       <div className="sensei-game">
         <div className="sensei-board-wrap">
@@ -248,20 +272,25 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
             {typeof humanProb === 'number' && humanProb >= 0 && (
               <div className="sensei-muted">{rankLabel(playerRank)}の人がこの手を打つ確率: {(humanProb * 100).toFixed(1)}%</div>
             )}
+            {candidates.length > 0 && <p className="sensei-muted text-xs">数字は良い手の順で、色が濃いほど良い手。{played ? '輪で囲んだのが実際に打った手です。' : ''}{bestIsPass ? 'AIの最善はパスです。' : ''}</p>}
             {candidates.length > 0 && (
               <div className="sensei-candidates">
-                {candidates.map((m, i) => (
-                  <button key={`${m.x}-${m.y}`} type="button" onClick={() => tryMove(m.x, m.y)}>
-                    <b>{candidateLetter(i)}</b>{i === 0 ? '最善' : `−${Math.max(0, m.pointsLost).toFixed(1)}`}
-                  </button>
-                ))}
+                {candidates.map((m, i) => {
+                  const shade = candidateShade(lossOf(m));
+                  return (
+                    <button key={`${m.x}-${m.y}`} type="button" className={isBest(m) ? 'is-best' : ''} onClick={() => tryMove(m.x, m.y)}>
+                      <b style={{ background: shade.fill, color: shade.text }}>{candidateLabel(i)}</b>
+                      {isBest(m) ? '最善' : `−${lossOf(m).toFixed(1)}目`}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
 
-          <ScoreGraph series={series} verdicts={verdicts} currentMove={Math.max(0, anchorIndex)} onSelect={(n) => goTo(line[Math.min(n, line.length - 1)])} />
+          <ScoreGraph series={series} verdicts={humanColor ? verdicts.filter((v) => v.player === humanColor) : verdicts} currentMove={Math.max(0, anchorIndex)} onSelect={(n) => goTo(line[Math.min(n, line.length - 1)])} />
           <p className="sensei-muted">
-            {isGameAnalysisRunning ? `対局を解析中… ${done} / ${total}` : `悪手・敗着 ${mistakes.length}手`}
+            {isGameAnalysisRunning ? `対局を解析中… ${done} / ${total}` : `${humanColor ? 'あなたの' : ''}悪手・敗着 ${mistakes.length}手`}
             {result ? ` · ${resultLabel(result)}` : ''}
           </p>
 

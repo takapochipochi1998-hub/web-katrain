@@ -240,6 +240,7 @@ export const SenseiApp: React.FC = () => {
         onAddProblem={addProblem}
         onPlayFromHere={playFromHere}
         onOpenSettings={() => { setView(null); setTab('settings'); }}
+        humanColor={meta?.humanColor ?? null}
       />
     );
   } else if (tab === 'play') {
