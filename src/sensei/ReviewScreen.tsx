@@ -274,6 +274,23 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
             {isGameAnalysisRunning ? `対局を解析中… ${done} / ${total}` : `${humanColor ? 'あなたの' : ''}悪手・敗着 ${mistakes.length}手`}
             {result ? ` · ${resultLabel(result)}` : ''}
           </p>
+          {mistakes.length > 0 && (
+            <div className="sensei-mistakes" role="list" aria-label="悪手の一覧">
+              {mistakes.map((v) => (
+                <button
+                  key={v.moveNumber}
+                  type="button"
+                  role="listitem"
+                  className={onMain && v.moveNumber === anchorIndex + 1 ? 'is-current' : ''}
+                  onClick={() => goTo(line[v.moveNumber - 1])}
+                >
+                  <span className="sensei-mistake-move">{v.moveNumber}手目</span>
+                  <span className="sensei-badge" style={{ background: QUALITY_COLOR[v.quality!] }}>{MOVE_QUALITY_LABEL[v.quality!]}</span>
+                  <span className="sensei-mistake-loss">−{v.pointsLost!.toFixed(1)}目</span>
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="sensei-card sensei-stack">
             <div className="sensei-row">

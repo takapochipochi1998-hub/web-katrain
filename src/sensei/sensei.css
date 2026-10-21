@@ -339,3 +339,9 @@
 .sensei-verdict-back { flex: none; }
 .sensei-verdict .sensei-loss + .sensei-verdict-back { margin-left: 4px; }
 .sensei-verdict > .sensei-verdict-back:nth-child(3) { margin-left: auto; }
+/* The player's mistakes, one row each; tapping a row opens the position before the move. */
+.sensei-mistakes { display: flex; flex-direction: column; border-top: 1px solid var(--s-border); }
+.sensei-mistakes button { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 4px; border-bottom: 1px solid var(--s-border); text-align: left; color: var(--s-text); }
+.sensei-mistakes button.is-current { background: var(--s-accent-soft); }
+.sensei-mistake-move { width: 4.5em; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sensei-mistake-loss { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; }
