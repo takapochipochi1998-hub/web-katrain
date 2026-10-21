@@ -6,7 +6,7 @@ import { outcomeFor, resultFromScoreLead, resultLabel } from './gameResult';
 import { rankLabel, recordResult, type RankBook, type RankedBoardSize } from './rankLadder';
 import { loseOnTime, saveSession, type SessionMeta } from './session';
 import { formatClock, hasClock, spendTime, viewClock } from './clock';
-import { Dialog, Header } from './ui';
+import { Dialog, NavMenu, type NavTarget } from './ui';
 import { useNarrow } from './useNarrow';
 
 const isPass = (m: { x: number; y: number } | null | undefined) => !!m && m.x < 0;
@@ -38,11 +38,11 @@ type Props = {
   onMetaChange: (meta: SessionMeta) => void;
   onReplay: () => void;
   onReview: () => void;
-  onLeave: () => void;
+  onNavigate: (target: NavTarget) => void;
 };
 
 /** Playing a game against the bot: the board, whose turn it is, pass and resign. */
-export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanksChange, onMetaChange, onReplay, onReview, onLeave }) => {
+export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanksChange, onMetaChange, onReplay, onReview, onNavigate }) => {
   const board = useGameStore((s) => s.board);
   const currentNode = useGameStore((s) => s.currentNode);
   const currentPlayer = useGameStore((s) => s.currentPlayer);
@@ -153,18 +153,6 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
       ? `おめでとうございます！ 棋力が${rankLabel(change.after)}に昇格しました`
       : `棋力が${rankLabel(change.after)}に降格しました`
     : null;
-  const moveNumber = currentNode.gameState.moveHistory.length;
-
-  const status = ended
-    ? resultLabel(endState)
-    : counting
-      ? <>地を数えています <span className="sensei-spinner" aria-hidden /></>
-      : isAiThinking || currentPlayer === aiColor
-        ? <>AIが考えています <span className="sensei-spinner" aria-hidden /></>
-        : liveGhost
-          ? 'もう一度タップすると打ちます'
-          : 'あなたの番です';
-
   const players: Array<{ color: Player; name: string; captures: number }> = [
     { color: 'black', name: meta.humanColor === 'black' ? 'あなた' : aiName, captures: capturedWhite },
     { color: 'white', name: meta.humanColor === 'white' ? 'あなた' : aiName, captures: capturedBlack },
@@ -178,12 +166,47 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
 
   return (
     <>
-      <Header
-        title={`${meta.size}路 · ${meta.kind === 'ranked' ? 'ランク戦' : '自由対局'}`}
-        left={<button type="button" className="sensei-back" onClick={onLeave}>‹ 戻る</button>}
-        right={<span className="sensei-muted">{moveNumber}手</span>}
-      />
       <div className="sensei-game">
+        <div className="sensei-side sensei-gamebar">
+          <div className="sensei-gamebar-row">
+            <NavMenu onNavigate={onNavigate} />
+            <div className="flex-1" />
+            {!ended ? (
+              <>
+                <button type="button" className="sensei-secondary sensei-compact" disabled={!humanToMove} onClick={() => { setGhost(null); useGameStore.getState().passTurn(); }}>パス</button>
+                <button type="button" className="sensei-danger sensei-compact" disabled={counting} onClick={() => setConfirmResign(true)}>投了</button>
+              </>
+            ) : (
+              <>
+                <button type="button" className="sensei-secondary sensei-compact" onClick={onReplay}>もう一度対局</button>
+                <button type="button" className="sensei-primary sensei-compact" onClick={onReview}>検討する</button>
+              </>
+            )}
+          </div>
+          <div className="sensei-players">
+            {players.map((p) => {
+              const thinking = !ended && p.color === aiColor && (isAiThinking || currentPlayer === aiColor) && !counting;
+              return (
+                <div key={p.color} className={`sensei-player${!ended && currentPlayer === p.color ? ' is-turn' : ''}`}>
+                  <span className={`sensei-stone sensei-stone-${p.color}`} aria-hidden />
+                  <div className="min-w-0 flex-1">
+                    <div className="sensei-player-name">{p.name}</div>
+                    <div className="sensei-player-sub">アゲハマ {p.captures}</div>
+                    {clockLabel && p.color === meta.humanColor && (
+                      <div className={`sensei-player-sub tabular-nums${clockUrgent ? ' sensei-clock-urgent' : ''}`}>{clockLabel}</div>
+                    )}
+                  </div>
+                  {thinking && <span className="sensei-spinner" aria-label="AIが考えています" />}
+                </div>
+              );
+            })}
+          </div>
+          {(counting || ended) && (
+            <div className="sensei-status" aria-live="polite">
+              {ended ? resultLabel(endState) : <>地を数えています <span className="sensei-spinner" aria-hidden /></>}
+            </div>
+          )}
+        </div>
         <div className="sensei-board-wrap">
           <SenseiBoard
             board={board}
@@ -194,34 +217,6 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
             showCoords={!narrow}
             onTap={tap}
           />
-        </div>
-        <div className="sensei-side">
-          <div className="sensei-players">
-            {players.map((p) => (
-              <div key={p.color} className={`sensei-player${!ended && currentPlayer === p.color ? ' is-turn' : ''}`}>
-                <span className={`sensei-stone sensei-stone-${p.color}`} aria-hidden />
-                <div className="min-w-0">
-                  <div className="sensei-player-name">{p.name}</div>
-                  <div className="sensei-player-sub">アゲハマ {p.captures}</div>
-                  {clockLabel && p.color === meta.humanColor && (
-                    <div className={`sensei-player-sub tabular-nums${clockUrgent ? ' sensei-clock-urgent' : ''}`}>{clockLabel}</div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="sensei-status" aria-live="polite">{status}</div>
-          {!ended ? (
-            <div className="sensei-actions">
-              <button type="button" className="sensei-secondary" disabled={!humanToMove} onClick={() => { setGhost(null); useGameStore.getState().passTurn(); }}>パス</button>
-              <button type="button" className="sensei-danger" disabled={counting} onClick={() => setConfirmResign(true)}>投了</button>
-            </div>
-          ) : (
-            <div className="sensei-actions">
-              <button type="button" className="sensei-secondary" onClick={onReplay}>もう一度対局</button>
-              <button type="button" className="sensei-primary" onClick={onReview}>検討する</button>
-            </div>
-          )}
         </div>
       </div>
 

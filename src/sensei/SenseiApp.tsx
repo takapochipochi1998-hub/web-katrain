@@ -156,6 +156,8 @@ export const SenseiApp: React.FC = () => {
     setView('game');
   };
 
+  const navigate = (target: Tab) => { setView(null); setTab(target); };
+
   const addProblem = (node: GameNode) => {
     const live = useGameStore.getState();
     const analysis = live.currentNode === node ? live.analysisData ?? node.analysis : node.analysis;
@@ -198,19 +200,18 @@ export const SenseiApp: React.FC = () => {
         onMetaChange={setMeta}
         onReplay={replay}
         onReview={() => setView('review')}
-        onLeave={() => setView(null)}
+        onNavigate={navigate}
       />
     );
   } else if (view === 'review') {
     content = (
       <ReviewScreen
         key={meta?.startedAt ?? 0}
-        title={meta ? `${meta.size}路 · AI ${rankLabel(meta.aiRank)}` : '読み込んだ棋譜'}
         playerRank={reviewRank}
         onPlayerRankChange={setReviewRank}
         geminiApiKey={prefs.geminiApiKey}
         geminiModel={prefs.geminiModel}
-        onBack={() => setView(null)}
+        onNavigate={navigate}
         onAddProblem={addProblem}
         onPlayFromHere={playFromHere}
         onOpenSettings={() => { setView(null); setTab('settings'); }}

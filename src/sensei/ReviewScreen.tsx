@@ -18,7 +18,7 @@ import {
 import { resultLabel } from './gameResult';
 import { pointLabel } from './coords';
 import { explainMove, factsForMove } from './explain';
-import { Header, Segmented, Switch } from './ui';
+import { Header, NavMenu, Segmented, Switch, type NavTarget } from './ui';
 import { useNarrow } from './useNarrow';
 import { RankPicker } from './RankPicker';
 import { humanProfileFor, rankLabel, type Rank } from './rankLadder';
@@ -63,20 +63,19 @@ const answeredTryouts = new WeakSet<GameNode>();
 let lastReviewedRoot: GameNode | null = null;
 
 type Props = {
-  title: string;
   /** The player's rank, for "how often would a player of my rank play this?" */
   playerRank: Rank;
   onPlayerRankChange: (rank: Rank) => void;
   geminiApiKey: string;
   geminiModel: string;
-  onBack: () => void;
+  onNavigate: (target: NavTarget) => void;
   onAddProblem: (node: GameNode) => void;
   onPlayFromHere: (node: GameNode) => void;
   onOpenSettings: () => void;
 };
 
 /** Reviewing a finished game: mistakes, candidates, the score graph and try-outs. */
-export const ReviewScreen: React.FC<Props> = ({ title, playerRank, onPlayerRankChange, geminiApiKey, geminiModel, onBack, onAddProblem, onPlayFromHere, onOpenSettings }) => {
+export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, geminiApiKey, geminiModel, onNavigate, onAddProblem, onPlayFromHere, onOpenSettings }) => {
   const rootNode = useGameStore((s) => s.rootNode);
   const currentNode = useGameStore((s) => s.currentNode);
   const board = useGameStore((s) => s.board);
@@ -213,8 +212,8 @@ export const ReviewScreen: React.FC<Props> = ({ title, playerRank, onPlayerRankC
   return (
     <>
       <Header
-        title={title}
-        left={<button type="button" className="sensei-back" onClick={onBack}>‹ 戻る</button>}
+        title="検討"
+        left={<NavMenu onNavigate={onNavigate} />}
         right={<span className="sensei-muted">{anchorIndex}手目</span>}
       />
       <div className="sensei-game">

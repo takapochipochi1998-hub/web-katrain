@@ -296,3 +296,15 @@
   .sensei-app.is-immersive .sensei-toast { bottom: calc(16px + env(safe-area-inset-bottom)); }
 }
 .sensei-clock-urgent { color: var(--s-bad); font-weight: 700; }
+
+/* Game top bar: menu, pass and resign, then the two players. */
+.sensei-gamebar { gap: 8px; padding-top: max(8px, env(safe-area-inset-top)); }
+.sensei-gamebar-row { display: flex; align-items: center; gap: 8px; }
+.sensei-menu-button { width: 44px; height: 44px; flex: none; display: inline-flex; align-items: center; justify-content: center; border-radius: 12px; color: var(--s-text); background: var(--s-surface); border: 1px solid var(--s-border); }
+.sensei-menu-button svg { width: 22px; height: 22px; }
+.sensei-compact { min-height: 40px; padding: 0 14px; font-size: 14px; }
+.sensei-gamebar .sensei-player { padding: 8px 10px; }
+.sensei-gamebar .sensei-status { min-height: 0; }
+@media (min-width: 900px) {
+  .sensei-gamebar { padding-top: 8px; order: 2; }
+}
