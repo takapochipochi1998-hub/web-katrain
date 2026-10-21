@@ -30,6 +30,8 @@ export type RankState = {
   /** null until the player sets a starting rank for this board size. */
   rank: Rank | null;
   history: RankHistoryEntry[];
+  /** When the rank last changed, by a result or by hand; decides which copy wins in a sync. */
+  changedAt?: number;
 };
 
 export type RankBook = Record<RankedBoardSize, RankState>;
@@ -63,12 +65,12 @@ export function recordResult(book: RankBook, size: RankedBoardSize, outcome: Gam
   const after = rankAfter(state.rank, outcome);
   return {
     ...book,
-    [size]: { rank: after, history: [...state.history, { at, outcome, before: state.rank, after }] },
+    [size]: { rank: after, history: [...state.history, { at, outcome, before: state.rank, after }], changedAt: at },
   };
 }
 
-export function setRank(book: RankBook, size: RankedBoardSize, rank: Rank): RankBook {
-  return { ...book, [size]: { ...book[size], rank } };
+export function setRank(book: RankBook, size: RankedBoardSize, rank: Rank, at: number = Date.now()): RankBook {
+  return { ...book, [size]: { ...book[size], rank, changedAt: at } };
 }
 
 const WEAKEST_HUMAN_KYU = 20;
@@ -100,8 +102,9 @@ export function parseRankBook(raw: unknown): RankBook {
   for (const size of RANKED_BOARD_SIZES) {
     const entry = (raw as Record<string, unknown>)[String(size)];
     if (!entry || typeof entry !== 'object') continue;
-    const { rank, history } = entry as { rank?: unknown; history?: unknown };
+    const { rank, history, changedAt } = entry as { rank?: unknown; history?: unknown; changedAt?: unknown };
     book[size] = {
+      ...(typeof changedAt === 'number' ? { changedAt } : {}),
       rank: isRank(rank) ? rank : null,
       history: Array.isArray(history)
         ? history.filter((h): h is RankHistoryEntry =>

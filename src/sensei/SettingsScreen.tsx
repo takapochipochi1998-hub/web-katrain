@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { clearLog, exportLog } from './log';
 import { runSpeedTest, type SpeedRow } from './speedTest';
+import type { SyncStatus } from './syncStatus';
 import { useGameStore } from '../store/gameStore';
 import { DEFAULT_GEMINI_MODEL, type Preferences } from './preferences';
 import { BYO_PERIODS } from './clock';
@@ -20,9 +21,9 @@ const BYO_TIMES = [
   { value: 60, label: '60秒' },
 ] as const;
 
-type Props = { prefs: Preferences; onChange: (prefs: Preferences) => void };
+type Props = { prefs: Preferences; onChange: (prefs: Preferences) => void; syncStatus: SyncStatus; onSyncNow: () => void };
 
-export const SettingsScreen: React.FC<Props> = ({ prefs, onChange }) => {
+export const SettingsScreen: React.FC<Props> = ({ prefs, onChange, syncStatus, onSyncNow }) => {
   const engineBackend = useGameStore((s) => s.engineBackend);
   const engineModelName = useGameStore((s) => s.engineModelName);
   const [keyDraft, setKeyDraft] = useState(prefs.geminiApiKey);
@@ -138,7 +139,14 @@ export const SettingsScreen: React.FC<Props> = ({ prefs, onChange }) => {
               onBlur={() => set({ cloudToken: tokenDraft.trim() })}
             />
           </label>
-          <p className="sensei-muted">この端末の中だけに保存します。空のままなら端末内のみで計ります。</p>
+          <p className="sensei-muted">この端末の中だけに保存します。同じ合言葉を入れた端末どうしで、棋譜・棋力・問題集が同期されます（設定は端末ごと）。</p>
+          <div className="sensei-row">
+            <span>
+              端末間の同期
+              <span className="sensei-muted block">{syncLabel(syncStatus)}</span>
+            </span>
+            <button type="button" className="sensei-secondary" disabled={!prefs.cloudToken || syncStatus.state === 'syncing'} onClick={onSyncNow}>今すぐ同期</button>
+          </div>
           <button type="button" className="sensei-secondary" disabled={testing} onClick={() => void speedTest()}>
             {testing ? '計測中…' : '速度テスト'}
           </button>
@@ -187,4 +195,11 @@ export const SettingsScreen: React.FC<Props> = ({ prefs, onChange }) => {
       </div>
     </>
   );
+};
+
+const syncLabel = (s: SyncStatus): string => {
+  if (s.state === 'off') return '合言葉を入れると始まります';
+  if (s.state === 'syncing') return '同期しています…';
+  const time = new Date(s.at).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+  return s.state === 'ok' ? `${time} に同期しました（棋譜 ${s.games}局）` : `${time} 同期できませんでした: ${s.message}`;
 };

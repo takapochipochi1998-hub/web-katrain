@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isSmallKataGoModel, KATAGO_RECOMMENDED_MODEL_PATH } from '../engine/katago/modelDefaults';
 import { useGameStore } from '../store/gameStore';
 import type { GameNode } from '../types';
@@ -33,6 +33,8 @@ import { log } from './log';
 import { setCloudConfig, warmUpCloud } from '../engine/katago/cloud';
 import { stoneSprites } from './stoneSprites';
 import { BoardPrefsContext } from './boardPrefs';
+import { loadTombstones, markDeleted, storeTombstones, syncWithServer } from './sync';
+import { syncUrlFor, type SyncStatus } from './syncStatus';
 
 type Tab = 'play' | 'games' | 'problems' | 'settings';
 type View = 'game' | 'review' | null;
@@ -137,6 +139,47 @@ export const SenseiApp: React.FC = () => {
     } : null);
     warmUpCloud();
   }, [prefs.cloudUrl, prefs.cloudToken]);
+
+  // Device sync: games, ranks and problems, through the cloud with the same secret.
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>({ state: 'off' });
+  const syncing = useRef(false);
+  const runSync = useCallback(async () => {
+    if (!prefs.cloudToken || syncing.current || (typeof navigator !== 'undefined' && navigator.onLine === false)) return;
+    syncing.current = true;
+    setSyncStatus((s) => ({ ...s, state: 'syncing' }));
+    try {
+      const local = { v: 1 as const, games: loadSavedGames(), ranks: loadRankBook(), problems: loadProblems(), deleted: loadTombstones() };
+      const merged = await syncWithServer(syncUrlFor(prefs.cloudUrl), prefs.cloudToken, local);
+      storeTombstones(merged.deleted);
+      if (JSON.stringify(merged.games) !== JSON.stringify(local.games)) { storeSavedGames(merged.games); setGames(merged.games); }
+      if (JSON.stringify(merged.ranks) !== JSON.stringify(local.ranks)) { saveRankBook(merged.ranks); setRanks(merged.ranks); }
+      if (JSON.stringify(merged.problems) !== JSON.stringify(local.problems)) { storeProblems(merged.problems); setProblems(merged.problems); }
+      log('sync-ok', { games: merged.games.length, problems: merged.problems.length });
+      setSyncStatus({ state: 'ok', at: Date.now(), games: merged.games.length });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      log('sync-error', { error: message });
+      setSyncStatus({ state: 'error', at: Date.now(), message });
+    } finally {
+      syncing.current = false;
+    }
+  }, [prefs.cloudToken, prefs.cloudUrl]);
+
+  // On start, when the app comes back to the front, and a while after things change
+  // (not during a game: every move would send the whole list).
+  const inGame = view === 'game';
+  useEffect(() => {
+    if (!prefs.cloudToken) return;
+    void runSync();
+    const onVisible = () => { if (document.visibilityState === 'visible') void runSync(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [prefs.cloudToken, runSync]);
+  useEffect(() => {
+    if (!prefs.cloudToken || inGame) return;
+    const timer = setTimeout(() => void runSync(), 8000);
+    return () => clearTimeout(timer);
+  }, [games, ranks, problems, inGame, prefs.cloudToken, runSync]);
 
   const updateRanks = useCallback((book: RankBook) => { setRanks(book); saveRankBook(book); }, []);
   const updatePrefs = (next: Preferences) => { setPrefs(next); storePreferences(next); };
@@ -262,7 +305,7 @@ export const SenseiApp: React.FC = () => {
           setMeta(null);
           setView('review');
         }}
-        onDelete={(id) => setGames((list) => { const next = removeGame(list, id); storeSavedGames(next); return next; })}
+        onDelete={(id) => { markDeleted('games', id); setGames((list) => { const next = removeGame(list, id); storeSavedGames(next); return next; }); }}
       />
     );
   } else if (tab === 'problems') {
@@ -270,11 +313,11 @@ export const SenseiApp: React.FC = () => {
       <ProblemsScreen
         problems={problems}
         onAttempt={(id, correct) => updateProblems(recordAttempt(problems, id, correct))}
-        onDelete={(id) => updateProblems(problems.filter((p) => p.id !== id))}
+        onDelete={(id) => { markDeleted('problems', id); updateProblems(problems.filter((p) => p.id !== id)); }}
       />
     );
   } else {
-    content = <SettingsScreen prefs={prefs} onChange={updatePrefs} />;
+    content = <SettingsScreen prefs={prefs} onChange={updatePrefs} syncStatus={syncStatus} onSyncNow={() => void runSync()} />;
   }
 
   return (
