@@ -45,7 +45,7 @@ const STAR_POINTS: Record<number, number[]> = {
 
 const CELL = 40;
 const R = CELL * 0.48;
-const LINE = '#4b3518';
+const LINE = '#3a2812';
 
 /** Board in Japanese coordinates: 1… across the top, 一… down the side. */
 export const SenseiBoard: React.FC<Props> = ({ board, lastMove, markers = [], ghost, dragPlayer, showCoords: showCoordsProp, onTap, disabled, territory }) => {
@@ -263,12 +263,13 @@ const WoodLayer = memo(function WoodLayer() {
     <svg className="sensei-board-wood" viewBox="0 0 400 400" preserveAspectRatio="none" aria-hidden>
       <defs>
         <linearGradient id={`${uid}-base`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#efcc8a" />
-          <stop offset="50%" stopColor="#e2b56c" />
-          <stop offset="100%" stopColor="#d6a75c" />
+          {/* Kaya: a bright golden yellow, warmer toward the bottom right. */}
+          <stop offset="0%" stopColor="#f3c27a" />
+          <stop offset="50%" stopColor="#e6ab60" />
+          <stop offset="100%" stopColor="#dc9f52" />
         </linearGradient>
         <filter id={`${uid}-grain`} x="0" y="0" width="100%" height="100%">
-          <feTurbulence type="fractalNoise" baseFrequency="0.085 0.0035" numOctaves="3" seed="11" />
+          <feTurbulence type="fractalNoise" baseFrequency="0.12 0.004" numOctaves="3" seed="11" />
           <feColorMatrix type="matrix" values="0 0 0 0 0.42  0 0 0 0 0.25  0 0 0 0 0.08  0 0 0 1.6 -0.7" />
         </filter>
         <filter id={`${uid}-fibre`} x="0" y="0" width="100%" height="100%">
@@ -277,8 +278,9 @@ const WoodLayer = memo(function WoodLayer() {
         </filter>
       </defs>
       <rect width="400" height="400" fill={`url(#${uid}-base)`} />
-      <rect width="400" height="400" filter={`url(#${uid}-grain)`} opacity={0.55} />
-      <rect width="400" height="400" filter={`url(#${uid}-fibre)`} opacity={0.35} />
+      {/* Fine, low-contrast grain: kaya is even, not streaky. */}
+      <rect width="400" height="400" filter={`url(#${uid}-grain)`} opacity={0.28} />
+      <rect width="400" height="400" filter={`url(#${uid}-fibre)`} opacity={0.22} />
     </svg>
   );
 });

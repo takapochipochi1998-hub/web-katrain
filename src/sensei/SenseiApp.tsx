@@ -271,7 +271,6 @@ export const SenseiApp: React.FC = () => {
         onMetaChange={setMeta}
         onReplay={replay}
         onReview={() => { log('open-review', { from: 'game' }); setView('review'); }}
-        onNavigate={navigate}
       />
     );
   } else if (view === 'review') {
@@ -282,7 +281,6 @@ export const SenseiApp: React.FC = () => {
         onPlayerRankChange={setReviewRank}
         geminiApiKey={prefs.geminiApiKey}
         geminiModel={prefs.geminiModel}
-        onNavigate={navigate}
         onAddProblem={addProblem}
         onPlayFromHere={playFromHere}
         onOpenSettings={() => { setView(null); setTab('settings'); }}

@@ -3,7 +3,7 @@ import { useGameStore } from '../store/gameStore';
 import type { GameNode, Player } from '../types';
 import { SenseiBoard, type BoardMarker } from './SenseiBoard';
 import { ScoreGraph } from './ScoreGraph';
-import { gradeThresholds, judgeScaleFor, MOVE_QUALITY_LABEL, type MoveQuality } from './moveQuality';
+import { judgeScaleFor, MOVE_QUALITY_LABEL, type MoveQuality } from './moveQuality';
 import {
   branchPoint,
   candidateLabel,
@@ -17,14 +17,13 @@ import {
   scoreSeries,
   type MoveVerdict,
 } from './reviewModel';
-import { resultLabel } from './gameResult';
 import { explainMove, factsForMove } from './explain';
-import { Header, NavMenu, Segmented, Switch, type NavTarget } from './ui';
+import { Segmented, Switch } from './ui';
 import { RankPicker } from './RankPicker';
 import { readLocalStorage, writeLocalStorage } from '../utils/storage';
 
 const TERRITORY_KEY = 'web-katrain:sensei-show-territory:v1';
-import { rankLabel, type Rank } from './rankLadder';
+import type { Rank } from './rankLadder';
 
 const DEPTHS = [
   { value: 200, label: '速い' },
@@ -65,7 +64,6 @@ type Props = {
   onPlayerRankChange: (rank: Rank) => void;
   geminiApiKey: string;
   geminiModel: string;
-  onNavigate: (target: NavTarget) => void;
   onAddProblem: (node: GameNode) => void;
   onPlayFromHere: (node: GameNode) => void;
   onOpenSettings: () => void;
@@ -74,7 +72,7 @@ type Props = {
 };
 
 /** Reviewing a finished game: mistakes, candidates, the score graph and try-outs. */
-export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, geminiApiKey, geminiModel, onNavigate, onAddProblem, onPlayFromHere, onOpenSettings, humanColor }) => {
+export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, geminiApiKey, geminiModel, onAddProblem, onPlayFromHere, onOpenSettings, humanColor }) => {
   const rootNode = useGameStore((s) => s.rootNode);
   const currentNode = useGameStore((s) => s.currentNode);
   const board = useGameStore((s) => s.board);
@@ -122,17 +120,12 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
   const line = useMemo(() => mainLine(rootNode), [rootNode, treeVersion]); // eslint-disable-line react-hooks/exhaustive-deps
   // Mistakes are judged by the player's level: lenient for beginners, strict for dan players.
   const judgeScale = judgeScaleFor(playerRank);
-  const grades = gradeThresholds(judgeScale);
   const verdicts = useMemo(() => judgeLine(line, judgeScale), [line, treeVersion, judgeScale]); // eslint-disable-line react-hooks/exhaustive-deps
   const series = useMemo(() => scoreSeries(line), [line, treeVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onMain = isOnMainLine(currentNode);
-  // Moves on the board now, try-outs included.
-  let moveDepth = 0;
-  for (let n = currentNode; n.parent; n = n.parent) moveDepth++;
   const anchor = branchPoint(currentNode);
   const anchorIndex = line.indexOf(anchor);
-  const result = line[line.length - 1]?.endState ?? rootNode.properties?.RE?.[0] ?? null;
 
   // The move being judged: the next game move on the main line, otherwise the
   // latest try-out move.
@@ -210,12 +203,7 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
 
   return (
     <>
-      <Header
-        title="検討"
-        left={<NavMenu onNavigate={onNavigate} />}
-        right={<span className="sensei-muted">{moveDepth}手目</span>}
-      />
-      <div className="sensei-game">
+      <div className="sensei-game sensei-review">
         <div className="sensei-board-wrap">
           <SenseiBoard board={board} lastMove={lastMove} markers={markers} territory={territory} dragPlayer={currentNode.gameState.currentPlayer} onTap={tryMove} />
         </div>
@@ -264,14 +252,7 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
             </div>
           </div>
 
-          <p className="sensei-muted">
-            {isGameAnalysisRunning ? `対局を解析中… ${done} / ${total}` : `${humanColor ? 'あなたの' : ''}悪手・敗着 ${mistakes.length}手`}
-            {result ? ` · ${resultLabel(result)}` : ''}
-          </p>
-          <p className="sensei-muted text-xs">
-            判定の物差し（{rankLabel(playerRank)}）: 凡手 {grades.inaccuracy}目〜 · 悪手 {grades.mistake}目〜 · 敗着 {grades.blunder}目〜
-            <span className="block">棋力が上がるほど、小さな損も悪手と判定します。下の「あなたの棋力」で変えられます</span>
-          </p>
+          {isGameAnalysisRunning && <p className="sensei-muted">対局を解析中… {done} / {total}</p>}
           {mistakes.length > 0 && (
             <div className="sensei-mistakes" role="list" aria-label="悪手の一覧">
               {mistakes.map((v) => (
@@ -337,7 +318,7 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
 
 const Verdict: React.FC<{ verdict: MoveVerdict }> = ({ verdict }) => {
   if (verdict.quality === null) return <span className="sensei-muted">{verdict.moveNumber}手目 · 解析中…</span>;
-  const label = verdict.quality === 'best' ? 'AIの一手' : MOVE_QUALITY_LABEL[verdict.quality];
+  const label = MOVE_QUALITY_LABEL[verdict.quality];
   return (
     <>
       <span className="font-bold">{verdict.moveNumber}手目</span>

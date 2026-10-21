@@ -6,7 +6,7 @@ import { outcomeFor, parseResult, resultFromScoreLead, resultLabel } from './gam
 import { rankLabel, recordResult, type RankBook, type RankedBoardSize } from './rankLadder';
 import { loseOnTime, saveSession, type SessionMeta } from './session';
 import { formatClock, hasClock, spendTime, viewClock } from './clock';
-import { Dialog, NavMenu, type NavTarget } from './ui';
+import { Dialog } from './ui';
 import { useNarrow } from './useNarrow';
 import { errorText, log } from './log';
 
@@ -41,11 +41,10 @@ type Props = {
   onMetaChange: (meta: SessionMeta) => void;
   onReplay: () => void;
   onReview: () => void;
-  onNavigate: (target: NavTarget) => void;
 };
 
 /** Playing a game against the bot: the board, whose turn it is, pass and resign. */
-export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanksChange, onMetaChange, onReplay, onReview, onNavigate }) => {
+export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanksChange, onMetaChange, onReplay, onReview }) => {
   const board = useGameStore((s) => s.board);
   const currentNode = useGameStore((s) => s.currentNode);
   const currentPlayer = useGameStore((s) => s.currentPlayer);
@@ -259,7 +258,6 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
       <div className="sensei-game">
         <div className="sensei-side sensei-gamebar">
           <div className="sensei-gamebar-row">
-            <NavMenu onNavigate={onNavigate} />
             <div className="flex-1" />
             {countFailed ? (
               <button type="button" className="sensei-primary sensei-compact" onClick={onReview}>検討する</button>

@@ -42,7 +42,7 @@ export const ScoreGraph: React.FC<Props> = ({ series, verdicts, currentMove, onS
       className="sensei-graph"
       role="img"
       aria-label="形勢グラフ"
-      // Press and slide: the move follows the finger. The graph takes the touch, so it does not scroll the page.
+      // Press and slide sideways: the move follows the finger. Vertical swipes still scroll the page (touch-action: pan-y).
       onPointerDown={(e) => {
         // Move first: on a phone a quick tap can lift before capture is set, and
         // setPointerCapture then throws, which used to swallow the tap.
