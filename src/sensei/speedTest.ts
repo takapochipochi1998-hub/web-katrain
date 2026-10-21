@@ -39,6 +39,7 @@ async function onDevice(pos: Position, visits: number, human: boolean, id: strin
   const { settings } = useGameStore.getState();
   const started = performance.now();
   await getKataGoEngineClient().analyze({
+    localOnly: true,
     positionId: `speedtest:${id}:${Date.now()}`,
     modelUrl: absolute(settings.katagoModelUrl),
     backend: settings.katagoBackend,

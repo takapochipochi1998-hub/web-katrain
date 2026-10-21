@@ -2,6 +2,9 @@ import type { KataGoWorkerRequest, KataGoWorkerResponse } from './types';
 import type { BoardState, GameRules, KataGoBackendPreference, Move, Player, RegionOfInterest } from '../../types';
 import { getWorkerConstructor } from '../../utils/browserWorker';
 import type { AnalysisQueueSignal } from '../../utils/analysisQueue';
+import { analyzeInCloud, cloudReady, reportCloud } from './cloud';
+
+const CLOUD_PREVIEW_VISITS = 200;
 
 type Analysis = NonNullable<Extract<KataGoWorkerResponse, { type: 'katago:analyze_result' }>['analysis']>;
 type EvalResult = NonNullable<Extract<KataGoWorkerResponse, { type: 'katago:eval_result' }>['eval']>;
@@ -277,9 +280,33 @@ class KataGoEngineClient {
     avoidMoves?: Array<{ x: number; y: number; player?: Player; untilDepth?: number }>;
     allowMoves?: Array<{ moves: Array<{ x: number; y: number }>; player?: Player; untilDepth?: number }>;
     onProgress?: (analysis: Analysis) => void;
+    /** Skip the cloud KataGo and use this device's engine. */
+    localOnly?: boolean;
   }): Promise<Analysis> {
-    this.rejectIfCrashed();
     if (args.signal?.aborted) throw new KataGoCanceledError();
+    // The cloud KataGo first, when set up; this device's engine if it fails.
+    // Region limits and move filters are on-device features only.
+    if (!args.localOnly && cloudReady() && !args.regionOfInterest && !args.avoidMoves?.length && !args.allowMoves?.length) {
+      const controller = new AbortController();
+      const unsubscribe = args.signal?.addAbortListener(() => controller.abort());
+      const started = Date.now();
+      try {
+        // A deep search shows nothing until it ends; show a quick one first.
+        if (args.onProgress && (args.visits ?? 0) > 2 * CLOUD_PREVIEW_VISITS) {
+          const preview = await analyzeInCloud({ ...args, visits: CLOUD_PREVIEW_VISITS }, controller.signal);
+          if (!controller.signal.aborted) args.onProgress(preview as Analysis);
+        }
+        const analysis = await analyzeInCloud(args, controller.signal);
+        reportCloud('ok', { ms: Date.now() - started, visits: args.visits });
+        return analysis as Analysis;
+      } catch (err) {
+        if (args.signal?.aborted) throw new KataGoCanceledError();
+        reportCloud('fallback', { ms: Date.now() - started, error: err instanceof Error ? err.message : String(err) });
+      } finally {
+        unsubscribe?.();
+      }
+    }
+    this.rejectIfCrashed();
     const id = this.nextId++;
     const req: KataGoWorkerRequest = {
       type: 'katago:analyze',

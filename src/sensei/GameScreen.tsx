@@ -105,6 +105,15 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
   // A ghost belongs to the position it was placed on.
   const liveGhost = ghost && ghost.nodeId === currentNode.id && humanToMove ? ghost : null;
 
+  // Nothing reads the live analysis during play; keep the engine free for the bot.
+  // Not when the game already sits at two passes: counting needs the analysis on.
+  useEffect(() => {
+    const store = useGameStore.getState();
+    const node = store.currentNode;
+    const atTwoPasses = isPass(node.move) && isPass(node.parent?.move);
+    if (store.isAnalysisMode && !node.endState && !atTwoPasses) store.toggleAnalysisMode();
+  }, []);
+
   // Two passes end the game but leave it uncounted: let the engine count it.
   // If the engine cannot (it failed, or took too long), the game stays reviewable.
   const [countFailedNodeId, setCountFailedNodeId] = useState<string | null>(null);
@@ -166,11 +175,6 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
     onMetaChange(updated);
   }, [ended, endState, meta, ranks, size, onRanksChange, onMetaChange, offRank]);
 
-  // Nothing reads the live analysis during play; keep the engine free for the bot.
-  useEffect(() => {
-    const store = useGameStore.getState();
-    if (store.isAnalysisMode && !useGameStore.getState().currentNode.endState) store.toggleAnalysisMode();
-  }, []);
 
   const tap = (x: number, y: number) => {
     if (board[y]?.[x]) return;

@@ -30,6 +30,7 @@ import { Icons } from './icons';
 import { Toast } from './ui';
 import { ErrorBoundary } from './ErrorBoundary';
 import { log } from './log';
+import { setCloudConfig, warmUpCloud } from '../engine/katago/cloud';
 
 type Tab = 'play' | 'games' | 'problems' | 'settings';
 type View = 'game' | 'review' | null;
@@ -119,12 +120,26 @@ export const SenseiApp: React.FC = () => {
 
   useEffect(() => { log('screen', { tab, view: view ?? '-' }); }, [tab, view]);
 
+  // The cloud KataGo, when its secret is set: wake it now so the first move is quick.
+  useEffect(() => {
+    setCloudConfig(prefs.cloudToken ? {
+      url: prefs.cloudUrl,
+      token: prefs.cloudToken,
+      onEvent: (event, data) => {
+        // Every fallback, and the bot's quick searches; not each review search.
+        if (event === 'fallback' || (typeof data.visits === 'number' && data.visits <= 64)) log(`cloud-${event}`, data);
+      },
+    } : null);
+    warmUpCloud();
+  }, [prefs.cloudUrl, prefs.cloudToken]);
+
   const updateRanks = useCallback((book: RankBook) => { setRanks(book); saveRankBook(book); }, []);
   const updatePrefs = (next: Preferences) => { setPrefs(next); storePreferences(next); };
   const updateProblems = (next: Problem[]) => { setProblems(next); storeProblems(next); };
 
   const begin = (config: GameConfig) => {
     setLastConfig(config);
+    warmUpCloud();
     const started = startGame({ ...config, timeControl: prefs.timeControl });
     log('game-start', { kind: started.kind, size: started.size, ai: started.aiRank, human: started.humanColor, time: prefs.timeControl.mainSec, byo: prefs.timeControl.byoSec });
     setMeta(started);
