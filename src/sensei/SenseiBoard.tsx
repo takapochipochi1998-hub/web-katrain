@@ -31,6 +31,8 @@ type Props = {
   showCoords?: boolean;
   onTap?: (x: number, y: number) => void;
   disabled?: boolean;
+  /** Who the engine expects to own each point, -1 (white) to 1 (black); drawn as squares. */
+  territory?: number[][] | null;
 };
 
 const STAR_POINTS: Record<number, number[]> = {
@@ -44,7 +46,7 @@ const R = CELL * 0.48;
 const LINE = '#4b3518';
 
 /** Board in Japanese coordinates: 1… across the top, 一… down the side. */
-export const SenseiBoard: React.FC<Props> = ({ board, lastMove, markers = [], ghost, dragPlayer, showCoords = true, onTap, disabled }) => {
+export const SenseiBoard: React.FC<Props> = ({ board, lastMove, markers = [], ghost, dragPlayer, showCoords = true, onTap, disabled, territory }) => {
   const uid = useId().replace(/:/g, '');
   const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
   const size = board.length;
@@ -147,6 +149,30 @@ export const SenseiBoard: React.FC<Props> = ({ board, lastMove, markers = [], gh
         {shownGhost && !board[shownGhost.y]?.[shownGhost.x] && (
           <g opacity={0.55} pointerEvents="none">
             <Stone uid={uid} cx={at(shownGhost.x)} cy={at(shownGhost.y)} player={shownGhost.player} variant={0} flat />
+          </g>
+        )}
+        {territory && (
+          <g pointerEvents="none">
+            {territory.flatMap((row, y) => row.map((v, x) => {
+              const owner = v > 0 ? 'black' : 'white';
+              const stone = board[y]?.[x];
+              // Empty points and stones expected to die: a square of the owner's colour.
+              if (Math.abs(v) < 0.2 || stone === owner) return null;
+              const side = CELL * (stone ? 0.34 : 0.3) * Math.min(1, 0.45 + Math.abs(v) * 0.55);
+              return (
+                <rect
+                  key={`t${x}-${y}`}
+                  x={at(x) - side / 2}
+                  y={at(y) - side / 2}
+                  width={side}
+                  height={side}
+                  fill={owner === 'black' ? '#141414' : '#f7f6f2'}
+                  stroke={owner === 'black' ? 'none' : '#555'}
+                  strokeWidth={0.6}
+                  opacity={0.35 + Math.abs(v) * 0.55}
+                />
+              );
+            }))}
           </g>
         )}
         {lastMove && board[lastMove.y]?.[lastMove.x] && (

@@ -22,6 +22,9 @@ import { explainMove, factsForMove } from './explain';
 import { Header, NavMenu, Segmented, Switch, type NavTarget } from './ui';
 import { useNarrow } from './useNarrow';
 import { RankPicker } from './RankPicker';
+import { readLocalStorage, writeLocalStorage } from '../utils/storage';
+
+const TERRITORY_KEY = 'web-katrain:sensei-show-territory:v1';
 import { humanProfileFor, rankLabel, type Rank } from './rankLadder';
 
 const DEPTHS = [
@@ -92,6 +95,8 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
 
   const narrow = useNarrow();
   const [autoReply, setAutoReply] = useState(true);
+  const [showTerritory, setShowTerritory] = useState(() => readLocalStorage(TERRITORY_KEY) === '1');
+  const toggleTerritory = (on: boolean) => { setShowTerritory(on); writeLocalStorage(TERRITORY_KEY, on ? '1' : '0'); };
   const [explanation, setExplanation] = useState<{ nodeId: string; text: string } | null>(null);
   const [explaining, setExplaining] = useState<string | null>(null);
   const [explainError, setExplainError] = useState<string | null>(null);
@@ -231,6 +236,16 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
     else markers.push({ x: played.x, y: played.y, ring });
   }
   const lastMove = currentNode.move && !isPass(currentNode.move) ? currentNode.move : null;
+  // Expected territory: points each side is likely to own, counting stones expected to die.
+  const territory = showTerritory ? analysis?.territory ?? null : null;
+  let blackArea = 0;
+  let whiteArea = 0;
+  territory?.forEach((row, y) => row.forEach((v, x) => {
+    const stone = board[y]?.[x];
+    if (v > 0.5 && stone !== 'black') blackArea++;
+    if (v < -0.5 && stone !== 'white') whiteArea++;
+  }));
+  const lead = analysis?.rootScoreLead;
   const shownExplanation = explanation && explainNode && explanation.nodeId === explainNode.id ? explanation.text : null;
 
   return (
@@ -242,7 +257,7 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
       />
       <div className="sensei-game">
         <div className="sensei-board-wrap">
-          <SenseiBoard board={board} lastMove={lastMove} markers={markers} dragPlayer={currentNode.gameState.currentPlayer} showCoords={!narrow} onTap={tryMove} />
+          <SenseiBoard board={board} lastMove={lastMove} markers={markers} territory={territory} dragPlayer={currentNode.gameState.currentPlayer} showCoords={!narrow} onTap={tryMove} />
         </div>
         <div className="sensei-side">
           <div className="sensei-nav-buttons">
@@ -252,6 +267,19 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
             <button type="button" aria-label="1手進む" onClick={() => goTo(onMain ? line[anchorIndex + 1] : currentNode.children[0])}>›</button>
             <button type="button" className="is-mistake" disabled={!nextMistake} onClick={() => goTo(nextMistake && line[nextMistake.moveNumber - 1])}>次の悪手</button>
             <button type="button" aria-label="最後へ" onClick={() => goTo(line[line.length - 1])}>»</button>
+          </div>
+
+          <div className="sensei-row">
+            <span>
+              地を表示
+              {territory && (
+                <span className="sensei-muted block">
+                  目安: 黒 {blackArea}目 · 白 {whiteArea}目
+                  {typeof lead === 'number' ? ` · 形勢 ${lead >= 0 ? '黒' : '白'}+${Math.abs(lead).toFixed(1)}目（コミ込み）` : ''}
+                </span>
+              )}
+            </span>
+            <Switch checked={showTerritory} onChange={toggleTerritory} label="地を表示" />
           </div>
 
           {!onMain && (
