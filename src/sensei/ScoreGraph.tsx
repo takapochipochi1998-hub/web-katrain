@@ -12,7 +12,8 @@ type Props = {
 const W = 320;
 const H = 120;
 const PAD = 12; // room for the mistake dots above and below
-const CLAMP = 20; // points; a runaway lead would flatten the rest
+/** The 10-point lines; the scale never shrinks below them, so a close game still reads as close. */
+const GUIDE = 10;
 
 /**
  * Score lead over the game, Black above the line and White below, with a dot
@@ -22,7 +23,10 @@ export const ScoreGraph: React.FC<Props> = ({ series, verdicts, currentMove, onS
   const last = Math.max(1, series.length - 1);
   const x = (i: number) => (i / last) * W;
   const mid = H / 2;
-  const y = (lead: number) => mid - (Math.max(-CLAMP, Math.min(CLAMP, lead)) / CLAMP) * (mid - PAD);
+  // Relative scale: the widest lead of this game fills the height, with a little headroom.
+  const widest = Math.max(GUIDE, ...series.map((v) => (v === null ? 0 : Math.abs(v))));
+  const span = widest * 1.1;
+  const y = (lead: number) => mid - (lead / span) * (mid - PAD);
 
   const points = series.map((lead, i) => (lead === null ? null : `${x(i)},${y(lead)}`)).filter(Boolean);
   const area = points.length > 1 ? `M0,${mid} L${points.join(' L')} L${x(series.length - 1)},${mid} Z` : '';
@@ -57,6 +61,12 @@ export const ScoreGraph: React.FC<Props> = ({ series, verdicts, currentMove, onS
       <rect width={W} height={mid} fill="var(--s-surface)" />
       {area && <path d={area} fill="var(--s-text)" opacity={0.78} />}
       <line x1={0} y1={mid} x2={W} y2={mid} stroke="var(--s-border)" strokeWidth={1} />
+      {[GUIDE, -GUIDE].map((g) => (
+        <g key={g}>
+          <line x1={0} y1={y(g)} x2={W} y2={y(g)} stroke="var(--s-muted)" strokeWidth={0.8} strokeDasharray="3 3" opacity={0.7} />
+          <text x={W - 4} y={y(g) + (g > 0 ? -3 : 10)} fontSize={9} textAnchor="end" fill="var(--s-text)" stroke="var(--s-surface)" strokeWidth={3} paintOrder="stroke">{g > 0 ? '黒+10目' : '白+10目'}</text>
+        </g>
+      ))}
       <text x={6} y={14} fontSize={10} fill="var(--s-muted)">黒リード</text>
       <text x={6} y={H - 16} fontSize={10} fill="var(--s-muted)">白リード</text>
       {verdicts.filter((v) => v.quality === 'mistake' || v.quality === 'blunder').map((v) => (
