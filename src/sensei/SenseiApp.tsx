@@ -31,6 +31,7 @@ import { Toast } from './ui';
 import { ErrorBoundary } from './ErrorBoundary';
 import { log } from './log';
 import { setCloudConfig, warmUpCloud } from '../engine/katago/cloud';
+import { stoneSprites } from './stoneSprites';
 
 type Tab = 'play' | 'games' | 'problems' | 'settings';
 type View = 'game' | 'review' | null;
@@ -119,6 +120,9 @@ export const SenseiApp: React.FC = () => {
   }, [meta]);
 
   useEffect(() => { log('screen', { tab, view: view ?? '-' }); }, [tab, view]);
+
+  // Paint and decode the stone pictures before the first board is drawn.
+  useEffect(() => { stoneSprites(); }, []);
 
   // The cloud KataGo, when its secret is set: wake it now so the first move is quick.
   useEffect(() => {

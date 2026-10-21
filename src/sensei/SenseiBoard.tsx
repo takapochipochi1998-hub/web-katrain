@@ -184,6 +184,8 @@ const Stone: React.FC<{ uid: string; cx: number; cy: number; player: Player; var
     return (
       <g pointerEvents="none">
         {!flat && <circle cx={cx + R * 0.1} cy={cy + R * 0.16} r={R * 1.08} fill={`url(#${uid}-shadow)`} />}
+        {/* A plain body under the picture, so the stone shows even before the image is decoded. */}
+        <circle cx={cx} cy={cy} r={R * 0.98} fill={`url(#${uid}-${player})`} />
         <image href={set[variant % set.length]} x={cx - R} y={cy - R} width={R * 2} height={R * 2} />
       </g>
     );

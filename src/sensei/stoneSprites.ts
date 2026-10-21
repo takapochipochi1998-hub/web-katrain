@@ -12,6 +12,8 @@ export const BLACK_VARIANTS = 2;
 export type StoneSprites = { black: string[]; white: string[] };
 
 let cached: StoneSprites | null | undefined;
+/** Held so the decoded pictures stay in memory. */
+const decoded: HTMLImageElement[] = [];
 
 /** Deterministic noise, so a stone looks the same on every render. */
 function rng(seed: number) {
@@ -149,6 +151,15 @@ export function stoneSprites(): StoneSprites | null {
     const black = Array.from({ length: BLACK_VARIANTS }, (_, i) => paintBlack(i + 1));
     const white = Array.from({ length: WHITE_VARIANTS }, (_, i) => paintWhite(i + 1));
     cached = black.every(Boolean) && white.every(Boolean) ? { black: black as string[], white: white as string[] } : null;
+    // Decode every picture now, not when the first stone of its kind is placed.
+    if (cached && typeof Image !== 'undefined') {
+      for (const src of [...cached.black, ...cached.white]) {
+        const img = new Image();
+        img.src = src;
+        void img.decode?.().catch(() => undefined);
+        decoded.push(img);
+      }
+    }
   } catch {
     cached = null;
   }
