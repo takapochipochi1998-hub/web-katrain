@@ -64,10 +64,16 @@ export function shiftRank(rank: Rank, steps: number): Rank {
 
 const RATING_BASE = 1000;
 const RATING_PER_RANK = 100;
-/** Larger steps for the first games, so a misjudged starting rank settles quickly. */
-const PROVISIONAL_GAMES = 10;
-const K_PROVISIONAL = 40;
+/**
+ * How far a result moves the rating, game by game. Everyone starts at 10 kyu;
+ * the first steps are huge (an even game moves 4 ranks, then 3, 2, …), a binary
+ * search for the player's level, so the bot is near their strength within a
+ * few games. From the tenth game it settles.
+ */
+const K_BY_GAME = [800, 600, 400, 300, 200, 150, 100, 80, 60, 40];
 const K_SETTLED = 24;
+/** Where every board size starts. */
+export const START_RANK: Rank = '10k';
 
 export const ratingForRank = (rank: Rank): number => RATING_BASE + RANKS.indexOf(rank) * RATING_PER_RANK;
 
@@ -80,18 +86,21 @@ export function rankForRating(rating: number): Rank {
 export const ratingOf = (state: RankState): number | null =>
   state.rating ?? (state.rank ? ratingForRank(state.rank) : null);
 
+/** The rating to play at: the player's, or the start for a board size never played. */
+export const playingRating = (state: RankState): number => ratingOf(state) ?? ratingForRank(START_RANK);
+
 /** The rating after one game against a bot of `opponent`'s rank (Elo). */
 export function nextRating(rating: number, opponent: Rank, outcome: GameOutcome, gamesPlayed: number): number {
   const expected = 1 / (1 + 10 ** ((ratingForRank(opponent) - rating) / 400));
   const score = outcome === 'win' ? 1 : outcome === 'loss' ? 0 : 0.5;
-  const k = gamesPlayed < PROVISIONAL_GAMES ? K_PROVISIONAL : K_SETTLED;
+  const k = K_BY_GAME[gamesPlayed] ?? K_SETTLED;
   return Math.round(rating + k * (score - expected));
 }
 
 export function recordResult(book: RankBook, size: RankedBoardSize, outcome: GameOutcome, at: number, opponent?: Rank): RankBook {
   const state = book[size];
-  const ratingBefore = ratingOf(state);
-  if (!state.rank || ratingBefore === null) return book;
+  // A first ranked game at a size starts from the starting rating.
+  const ratingBefore = playingRating(state);
   const games = state.games ?? state.history.length;
   const ratingAfter = nextRating(ratingBefore, opponent ?? rankForRating(ratingBefore), outcome, games);
   const after = rankForRating(ratingAfter);
@@ -101,7 +110,7 @@ export function recordResult(book: RankBook, size: RankedBoardSize, outcome: Gam
       rank: after,
       rating: ratingAfter,
       games: games + 1,
-      history: [...state.history, { at, outcome, before: state.rank, after, ratingBefore, ratingAfter, ...(opponent ? { opponent } : {}) }],
+      history: [...state.history, { at, outcome, before: state.rank ?? rankForRating(ratingBefore), after, ratingBefore, ratingAfter, ...(opponent ? { opponent } : {}) }],
       changedAt: at,
     },
   };

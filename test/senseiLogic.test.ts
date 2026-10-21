@@ -41,8 +41,9 @@ describe('rank ladder', () => {
     expect(rankForRating(99999)).toBe('9d');
   });
 
-  it('moves the rating the Elo way: more for an upset, more while provisional', () => {
-    expect(nextRating(3000, '10k', 'win', 0)).toBe(3020);
+  it('moves the rating the Elo way: more for an upset, far more in the first games', () => {
+    expect(nextRating(3000, '10k', 'win', 0)).toBe(3400);
+    expect(nextRating(3000, '10k', 'loss', 1)).toBe(2700);
     expect(nextRating(3000, '10k', 'win', 20)).toBe(3012);
     expect(nextRating(3000, '10k', 'loss', 20)).toBe(2988);
     expect(nextRating(3000, '10k', 'draw', 20)).toBe(3000);
@@ -52,9 +53,9 @@ describe('rank ladder', () => {
   it('keeps each board size apart and logs the change', () => {
     let book = setRank(emptyRankBook(), 9, '10k', 1);
     book = recordResult(book, 9, 'win', 1000, '10k');
-    expect(book[9].rating).toBe(3020);
-    expect(book[9].rank).toBe('10k');
-    expect(book[9].history).toEqual([{ at: 1000, outcome: 'win', before: '10k', after: '10k', ratingBefore: 3000, ratingAfter: 3020, opponent: '10k' }]);
+    expect(book[9].rating).toBe(3400);
+    expect(book[9].rank).toBe('6k');
+    expect(book[9].history).toEqual([{ at: 1000, outcome: 'win', before: '10k', after: '6k', ratingBefore: 3000, ratingAfter: 3400, opponent: '10k' }]);
     expect(book[19].rank).toBeNull();
   });
 
@@ -62,9 +63,9 @@ describe('rank ladder', () => {
     expect(ratingOf({ rank: '5k', history: [] })).toBe(3500);
   });
 
-  it('ignores a result for a board size with no rank set yet', () => {
-    const book = emptyRankBook();
-    expect(recordResult(book, 13, 'win', 1)).toBe(book);
+  it('starts a board size never played at 10 kyu', () => {
+    const book = recordResult(emptyRankBook(), 13, 'loss', 1, '10k');
+    expect(book[13]).toMatchObject({ rating: 2600, rank: '14k', games: 1 });
   });
 
   it('labels ranks the Japanese way and names the human profile', () => {

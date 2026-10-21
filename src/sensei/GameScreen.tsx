@@ -195,8 +195,8 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
     : null;
   const rankChange = change && change.before !== change.after
     ? change.outcome === 'win'
-      ? `おめでとうございます！ ${rankLabel(change.after)}相当になりました`
-      : `${rankLabel(change.after)}相当になりました`
+      ? `おめでとうございます！ ${rankLabel(change.after)}になりました`
+      : `${rankLabel(change.after)}になりました`
     : null;
   // The clock is the chip's main figure; byo-yomi tints the chip so it shows at a glance.
   const flagged = parseResult(endState)?.margin === 'time';
@@ -217,7 +217,7 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
     const captures = color === 'black' ? capturedWhite : capturedBlack;
     const level = who === 'ai'
       ? rankLabel(meta.aiRank)
-      : rating !== null ? `レート ${rating} · ${rankLabel(rankForRating(rating))}相当` : '練習対局';
+      : rating !== null ? `レート ${rating} · ${rankLabel(rankForRating(rating))}` : '練習対局';
     return (
       <div className={`sensei-player${!ended && currentPlayer === color ? ' is-turn' : ''}${who === 'me' && clock?.byo ? ' is-byoyomi' : ''}`}>
         <span className={`sensei-stone sensei-stone-${color}`} aria-hidden />

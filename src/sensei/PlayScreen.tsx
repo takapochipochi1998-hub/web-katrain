@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { BoardSize } from '../types';
 import { RankHistoryChart, RankPicker } from './RankPicker';
-import { rankForRating, rankLabel, ratingOf, setRank, type Rank, type RankBook, type RankedBoardSize } from './rankLadder';
+import { playingRating, rankForRating, rankLabel, type Rank, type RankBook, type RankedBoardSize } from './rankLadder';
 import type { GameConfig, SessionMeta } from './session';
 import { Header, Segmented } from './ui';
 
@@ -13,26 +13,27 @@ const TAB_OPTIONS: ReadonlyArray<{ value: Tab; label: string }> = [
 ];
 
 const SIZE_OPTIONS: ReadonlyArray<{ value: RankedBoardSize; label: string }> = [
-  { value: 19, label: '19路' },
-  { value: 13, label: '13路' },
   { value: 9, label: '9路' },
+  { value: 13, label: '13路' },
+  { value: 19, label: '19路' },
 ];
 
 const KOMI_FOR_HANDICAP = (handicap: number) => (handicap > 0 ? 0.5 : 6.5);
 
 type Props = {
   ranks: RankBook;
-  onRanksChange: (book: RankBook) => void;
   onStart: (config: GameConfig) => void;
   /** A game still in progress, offered for resuming. */
   ongoing: SessionMeta | null;
   onResume: () => void;
+  /** The board size the player has used most in their recent games. */
+  preferredSize: RankedBoardSize;
 };
 
 /** "AIと対局": ranked play (a rating per board size) and practice games. */
-export const PlayScreen: React.FC<Props> = ({ ranks, onRanksChange, onStart, ongoing, onResume }) => {
+export const PlayScreen: React.FC<Props> = ({ ranks, onStart, ongoing, onResume, preferredSize }) => {
   const [tab, setTab] = useState<Tab>('ranked');
-  const [size, setSize] = useState<RankedBoardSize>(19);
+  const [size, setSize] = useState<RankedBoardSize>(preferredSize);
   return (
     <>
       <Header title="AIと対局" />
@@ -64,13 +65,13 @@ export const PlayScreen: React.FC<Props> = ({ ranks, onRanksChange, onStart, ong
           ))}
         </div>
         {tab === 'free' ? (
-          <FreeGameForm onStart={onStart} />
+          <FreeGameForm onStart={onStart} initialSize={preferredSize} />
         ) : (
           <>
             <div className="sensei-size-pick">
               <Segmented options={SIZE_OPTIONS} value={size} onChange={setSize} label="盤の大きさ" />
             </div>
-            <RankedPanel key={size} size={size} ranks={ranks} onRanksChange={onRanksChange} onStart={onStart} />
+            <RankedPanel key={size} size={size} ranks={ranks} onStart={onStart} />
           </>
         )}
       </div>
@@ -78,26 +79,11 @@ export const PlayScreen: React.FC<Props> = ({ ranks, onRanksChange, onStart, ong
   );
 };
 
-const RankedPanel: React.FC<Pick<Props, 'ranks' | 'onRanksChange' | 'onStart'> & { size: RankedBoardSize }> = ({ size, ranks, onRanksChange, onStart }) => {
+const RankedPanel: React.FC<Pick<Props, 'ranks' | 'onStart'> & { size: RankedBoardSize }> = ({ size, ranks, onStart }) => {
   const state = ranks[size];
-  const [initial, setInitial] = useState<Rank>('10k');
-  const rating = ratingOf(state);
-
-  if (rating === null) {
-    return (
-      <div className="sensei-card sensei-stack">
-        <h2>{size}路のランク戦をはじめる</h2>
-        <p className="sensei-muted">最初に1回だけ、だいたいの棋力を選びます。そこからレートが始まり、勝てば上がり、負ければ下がります。対局相手はいつも、今のレートに見合うAIです。</p>
-        <RankPicker value={initial} onChange={setInitial} />
-        <button type="button" className="sensei-primary sensei-block" onClick={() => onRanksChange(setRank(ranks, size, initial))}>
-          {rankLabel(initial)}相当から始める
-        </button>
-      </div>
-    );
-  }
-
-  // The bot is always the rank the rating stands at.
-  const opponent = rankForRating(rating);
+  // Never played at this size: start at 10 kyu; the first games find the level fast.
+  const rating = playingRating(state);
+  const rank = rankForRating(rating);
   const wins = state.history.filter((h) => h.outcome === 'win').length;
   const losses = state.history.filter((h) => h.outcome === 'loss').length;
   return (
@@ -107,28 +93,30 @@ const RankedPanel: React.FC<Pick<Props, 'ranks' | 'onRanksChange' | 'onStart'> &
           <div>
             <div className="sensei-muted">{size}路のレート</div>
             <div className="sensei-big tabular-nums">{rating}</div>
-            <div className="sensei-rank-equiv">{rankLabel(opponent)}相当</div>
+            <div className="sensei-rank-equiv">{rankLabel(rank)}</div>
           </div>
           <div className="sensei-muted text-right">{wins}勝 {losses}敗</div>
         </div>
         <button
           type="button"
           className="sensei-primary sensei-block"
-          onClick={() => onStart({ kind: 'ranked', size, aiRank: opponent, handicap: 0, komi: 6.5 })}
+          onClick={() => onStart({ kind: 'ranked', size, aiRank: rank, handicap: 0, komi: 6.5 })}
         >
-          対局する（相手: AI {rankLabel(opponent)}）
+          対局する
         </button>
       </div>
-      <div className="sensei-card">
-        <h2>レートの推移</h2>
-        <RankHistoryChart history={state.history} />
-      </div>
+      {state.history.length > 0 && (
+        <div className="sensei-card">
+          <h2>レートの推移</h2>
+          <RankHistoryChart history={state.history} />
+        </div>
+      )}
     </>
   );
 };
 
-const FreeGameForm: React.FC<{ onStart: (config: GameConfig) => void }> = ({ onStart }) => {
-  const [size, setSize] = useState<BoardSize>(19);
+const FreeGameForm: React.FC<{ onStart: (config: GameConfig) => void; initialSize: BoardSize }> = ({ onStart, initialSize }) => {
+  const [size, setSize] = useState<BoardSize>(initialSize);
   const [aiRank, setAiRank] = useState<Rank>('5k');
   const [showDetails, setShowDetails] = useState(false);
   const [handicap, setHandicap] = useState(0);

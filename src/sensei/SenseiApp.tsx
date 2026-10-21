@@ -286,6 +286,13 @@ export const SenseiApp: React.FC = () => {
   };
 
   const boardPrefs = useMemo(() => ({ showCoords: prefs.showCoords }), [prefs.showCoords]);
+  // The size the player has used most in their last five games (the newest wins a tie).
+  const preferredSize = ((): 9 | 13 | 19 => {
+    const recent = games.slice(0, 5).map((g) => g.meta.size).filter((n): n is 9 | 13 | 19 => n === 9 || n === 13 || n === 19);
+    if (!recent.length) return 19;
+    const count = (n: number) => recent.filter((x) => x === n).length;
+    return recent.reduce((best, n) => (count(n) > count(best) ? n : best), recent[0]!);
+  })();
   const currentSaved = meta ? games.find((g) => g.id === gameIdFor(meta)) : undefined;
   const ongoing = meta && !currentSaved?.result && view !== 'game' ? meta : null;
 
@@ -316,7 +323,7 @@ export const SenseiApp: React.FC = () => {
       />
     );
   } else if (tab === 'play') {
-    content = <PlayScreen ranks={ranks} onRanksChange={updateRanks} onStart={begin} ongoing={ongoing} onResume={resume} />;
+    content = <PlayScreen ranks={ranks} onStart={begin} ongoing={ongoing} onResume={resume} preferredSize={preferredSize} />;
   } else if (tab === 'games') {
     content = (
       <GamesScreen

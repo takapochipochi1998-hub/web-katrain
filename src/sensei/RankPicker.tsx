@@ -21,8 +21,8 @@ export const RankPicker: React.FC<{ value: Rank; onChange: (rank: Rank) => void;
 );
 
 /**
- * The rating after each ranked game, oldest on the left: a line with a dot per
- * game (blue a win, red a loss), rank-equivalent ticks on the left, dates below.
+ * The rating after each ranked game, oldest on the left: a plain line with
+ * rank ticks on the left and dates below.
  */
 export const RankHistoryChart: React.FC<{ history: readonly RankHistoryEntry[] }> = ({ history }) => {
   const recent = history.slice(-30);
@@ -51,7 +51,6 @@ export const RankHistoryChart: React.FC<{ history: readonly RankHistoryEntry[] }
   const ticks: number[] = [];
   for (let v = Math.ceil(min / 100) * 100; v <= max; v += 100) if ((v / 100) % (tickStep / 100) === 0) ticks.push(v);
   const day = (t: number) => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()}`; };
-  const color = (outcome: RankHistoryEntry['outcome']) => (outcome === 'win' ? 'var(--s-accent)' : outcome === 'loss' ? '#d2333f' : 'var(--s-muted)');
   return (
     <figure className="sensei-rank-chart">
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`レートの推移: ${values[0]}から${values[values.length - 1]}`}>
@@ -62,14 +61,9 @@ export const RankHistoryChart: React.FC<{ history: readonly RankHistoryEntry[] }
           </g>
         ))}
         <path d={path} fill="none" stroke="var(--s-accent)" strokeWidth={2.2} strokeLinejoin="round" />
-        <circle cx={x(0)} cy={y(values[0]!)} r={3} fill="var(--s-surface)" stroke="var(--s-accent)" strokeWidth={1.6} />
-        {recent.map((h, i) => <circle key={h.at} cx={x(i + 1)} cy={y(values[i + 1]!)} r={3.6} fill={color(h.outcome)} />)}
         <text x={left} y={H - 6} fontSize={10} fill="var(--s-muted)">{day(recent[0]!.at)}</text>
         <text x={W - right} y={H - 6} fontSize={10} textAnchor="end" fill="var(--s-muted)">{day(recent[recent.length - 1]!.at)}</text>
       </svg>
-      <figcaption className="sensei-muted text-xs">
-        {history.length > recent.length ? `直近${recent.length}局` : `${recent.length}局`}。● 青＝勝ち、赤＝負け。目盛りは級位の目安（100点で1級）
-      </figcaption>
     </figure>
   );
 };
