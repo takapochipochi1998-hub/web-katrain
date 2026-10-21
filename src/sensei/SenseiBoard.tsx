@@ -1,4 +1,5 @@
 import React, { memo, useId, useState } from 'react';
+import { stoneSprites } from './stoneSprites';
 import type { BoardState, Player } from '../types';
 import { kanjiRow } from './coords';
 
@@ -139,7 +140,7 @@ export const SenseiBoard: React.FC<Props> = ({ board, lastMove, markers = [], gh
         )}
 
         {board.flatMap((row, y) => row.map((s, x) => s && (
-          <Stone key={`s${x}-${y}`} uid={uid} cx={at(x)} cy={at(y)} player={s} variant={(x * 7 + y * 3) % 3} />
+          <Stone key={`s${x}-${y}`} uid={uid} cx={at(x)} cy={at(y)} player={s} variant={(x * 7 + y * 3) % 6} />
         )))}
         {shownGhost && !board[shownGhost.y]?.[shownGhost.x] && (
           <g opacity={0.55} pointerEvents="none">
@@ -176,11 +177,26 @@ export const SenseiBoard: React.FC<Props> = ({ board, lastMove, markers = [], gh
 };
 
 /** One stone: a soft shadow, the body, a highlight, and shell lines on white. */
-const Stone: React.FC<{ uid: string; cx: number; cy: number; player: Player; variant: number; flat?: boolean }> = ({ uid, cx, cy, player, variant, flat }) => (
+const Stone: React.FC<{ uid: string; cx: number; cy: number; player: Player; variant: number; flat?: boolean }> = ({ uid, cx, cy, player, variant, flat }) => {
+  const sprites = stoneSprites();
+  if (sprites) {
+    const set = sprites[player];
+    return (
+      <g pointerEvents="none">
+        {!flat && <circle cx={cx + R * 0.1} cy={cy + R * 0.16} r={R * 1.08} fill={`url(#${uid}-shadow)`} />}
+        <image href={set[variant % set.length]} x={cx - R} y={cy - R} width={R * 2} height={R * 2} />
+      </g>
+    );
+  }
+  return <PlainStone uid={uid} cx={cx} cy={cy} player={player} variant={variant} flat={flat} />;
+};
+
+/** Where no canvas paints sprites: gradients only. */
+const PlainStone: React.FC<{ uid: string; cx: number; cy: number; player: Player; variant: number; flat?: boolean }> = ({ uid, cx, cy, player, variant, flat }) => (
   <g pointerEvents="none">
     {!flat && <circle cx={cx + R * 0.1} cy={cy + R * 0.16} r={R * 1.08} fill={`url(#${uid}-shadow)`} />}
     <circle cx={cx} cy={cy} r={R} fill={`url(#${uid}-${player})`} />
-    {player === 'white' && <ShellLines cx={cx} cy={cy} angle={[-18, 8, 27][variant] ?? 0} />}
+    {player === 'white' && <ShellLines cx={cx} cy={cy} angle={[-18, 8, 27][variant % 3] ?? 0} />}
     <ellipse cx={cx - R * 0.32} cy={cy - R * 0.38} rx={R * 0.42} ry={R * 0.26} fill={`url(#${uid}-shine)`} opacity={player === 'black' ? 0.5 : 0.8} transform={`rotate(-30 ${cx - R * 0.32} ${cy - R * 0.38})`} />
   </g>
 );
