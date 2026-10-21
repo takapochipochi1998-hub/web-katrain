@@ -40,7 +40,8 @@ export type MoveVerdict = {
   quality: MoveQuality | null;
 };
 
-export function judgeMove(node: GameNode, moveNumber: number): MoveVerdict | null {
+/** `scale` stretches the grade thresholds for the player's level (see judgeScaleFor). */
+export function judgeMove(node: GameNode, moveNumber: number, scale = 1): MoveVerdict | null {
   if (!node.move) return null;
   const pointsLost = node.move.x < 0 ? null : computeNodePointsLost(node);
   return {
@@ -48,14 +49,14 @@ export function judgeMove(node: GameNode, moveNumber: number): MoveVerdict | nul
     moveNumber,
     player: node.move.player,
     pointsLost,
-    quality: pointsLost === null ? null : classifyMove(pointsLost),
+    quality: pointsLost === null ? null : classifyMove(pointsLost, scale),
   };
 }
 
-export function judgeLine(line: readonly GameNode[]): MoveVerdict[] {
+export function judgeLine(line: readonly GameNode[], scale = 1): MoveVerdict[] {
   const verdicts: MoveVerdict[] = [];
   line.forEach((node, index) => {
-    const verdict = judgeMove(node, index);
+    const verdict = judgeMove(node, index, scale);
     if (verdict) verdicts.push(verdict);
   });
   return verdicts;

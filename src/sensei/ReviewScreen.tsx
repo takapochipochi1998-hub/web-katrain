@@ -3,7 +3,7 @@ import { useGameStore } from '../store/gameStore';
 import type { GameNode, Player } from '../types';
 import { SenseiBoard, type BoardMarker } from './SenseiBoard';
 import { ScoreGraph } from './ScoreGraph';
-import { MOVE_QUALITY_LABEL, type MoveQuality } from './moveQuality';
+import { gradeThresholds, judgeScaleFor, MOVE_QUALITY_LABEL, type MoveQuality } from './moveQuality';
 import {
   branchPoint,
   candidateLabel,
@@ -24,7 +24,7 @@ import { RankPicker } from './RankPicker';
 import { readLocalStorage, writeLocalStorage } from '../utils/storage';
 
 const TERRITORY_KEY = 'web-katrain:sensei-show-territory:v1';
-import { humanProfileFor, type Rank } from './rankLadder';
+import { rankLabel, type Rank } from './rankLadder';
 
 const DEPTHS = [
   { value: 200, label: '速い' },
@@ -103,19 +103,13 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
     lastReviewedRoot = store.rootNode;
   }, []);
 
-  // "打ち手の級位": read each position with the human net at the player's rank too.
-  // Changing it wipes every analysis in the tree (web-katrain treats it as an
-  // engine change), so the quick pass is started after it, never before.
+  // Set the analysis depth to one of the three choices once. The player's rank is
+  // only used to judge moves now, so changing it must not wipe the analysis.
   useEffect(() => {
     const store = useGameStore.getState();
-    const profile = humanProfileFor(playerRank);
-    const patch: Partial<typeof store.settings> = {};
-    if (!store.settings.humanSlEnabled || store.settings.humanSlProfile !== profile) Object.assign(patch, { humanSlEnabled: true, humanSlProfile: profile });
-    // A depth set elsewhere (not one of the three here) would show one choice and use another.
-    if (!DEPTHS.some((d) => d.value === store.settings.katagoVisits)) patch.katagoVisits = 1000;
-    if (Object.keys(patch).length > 0) store.updateSettings(patch);
+    if (!DEPTHS.some((d) => d.value === store.settings.katagoVisits)) store.updateSettings({ katagoVisits: 1000 });
     refreshAnalysis();
-  }, [playerRank]);
+  }, []);
 
   // Read every position as it comes on screen. Stepping one move does this in the
   // store, but jumping (graph, mistakes, back to the game) does not, and the quick
@@ -126,7 +120,10 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
 
   // treeVersion: analysis lands on nodes in place, so derive again when it moves.
   const line = useMemo(() => mainLine(rootNode), [rootNode, treeVersion]); // eslint-disable-line react-hooks/exhaustive-deps
-  const verdicts = useMemo(() => judgeLine(line), [line, treeVersion]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Mistakes are judged by the player's level: lenient for beginners, strict for dan players.
+  const judgeScale = judgeScaleFor(playerRank);
+  const grades = gradeThresholds(judgeScale);
+  const verdicts = useMemo(() => judgeLine(line, judgeScale), [line, treeVersion, judgeScale]); // eslint-disable-line react-hooks/exhaustive-deps
   const series = useMemo(() => scoreSeries(line), [line, treeVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onMain = isOnMainLine(currentNode);
@@ -141,7 +138,7 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
   // latest try-out move.
   const judged: MoveVerdict | null = onMain
     ? verdicts.find((v) => v.moveNumber === anchorIndex + 1) ?? null
-    : judgeMove(currentNode, currentNode.gameState.moveHistory.length);
+    : judgeMove(currentNode, currentNode.gameState.moveHistory.length, judgeScale);
   // The node whose move "AIに聞く" explains.
   const explainNode = onMain ? line[anchorIndex + 1] : currentNode;
   const judgedMove = onMain ? line[anchorIndex + 1]?.move : currentNode.move;
@@ -271,6 +268,10 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
             {isGameAnalysisRunning ? `対局を解析中… ${done} / ${total}` : `${humanColor ? 'あなたの' : ''}悪手・敗着 ${mistakes.length}手`}
             {result ? ` · ${resultLabel(result)}` : ''}
           </p>
+          <p className="sensei-muted text-xs">
+            判定の物差し（{rankLabel(playerRank)}）: 凡手 {grades.inaccuracy}目〜 · 悪手 {grades.mistake}目〜 · 敗着 {grades.blunder}目〜
+            <span className="block">棋力が上がるほど、小さな損も悪手と判定します。下の「あなたの棋力」で変えられます</span>
+          </p>
           {mistakes.length > 0 && (
             <div className="sensei-mistakes" role="list" aria-label="悪手の一覧">
               {mistakes.map((v) => (
@@ -312,7 +313,10 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
 
           <div className="sensei-card sensei-stack">
             <div className="flex flex-col gap-2">
-              <span>この局面から対局するときのAIの級位</span>
+              <span>
+                あなたの棋力
+                <span className="sensei-muted block">悪手の判定の厳しさと、「この局面からAIと対局」の相手の強さに使います</span>
+              </span>
               <RankPicker value={playerRank} onChange={onPlayerRankChange} />
             </div>
             <div className="sensei-row">
