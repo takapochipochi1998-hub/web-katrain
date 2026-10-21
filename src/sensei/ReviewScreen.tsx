@@ -220,6 +220,7 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
           <SenseiBoard board={board} lastMove={lastMove} markers={markers} territory={territory} dragPlayer={currentNode.gameState.currentPlayer} onTap={tryMove} />
         </div>
         <div className="sensei-side">
+          <ScoreGraph series={series} verdicts={humanColor ? verdicts.filter((v) => v.player === humanColor) : verdicts} currentMove={Math.max(0, anchorIndex)} onSelect={(n) => goTo(line[Math.min(n, line.length - 1)])} />
           <div className="sensei-nav-buttons">
             <button type="button" aria-label="最初へ" onClick={() => goTo(line[0])}><EdgeIcon end="start" /></button>
             <button type="button" className="is-mistake" disabled={!prevMistake} onClick={() => goTo(prevMistake && line[prevMistake.moveNumber - 1])}>前の悪手</button>
@@ -263,7 +264,6 @@ export const ReviewScreen: React.FC<Props> = ({ playerRank, onPlayerRankChange, 
             </div>
           </div>
 
-          <ScoreGraph series={series} verdicts={humanColor ? verdicts.filter((v) => v.player === humanColor) : verdicts} currentMove={Math.max(0, anchorIndex)} onSelect={(n) => goTo(line[Math.min(n, line.length - 1)])} />
           <p className="sensei-muted">
             {isGameAnalysisRunning ? `対局を解析中… ${done} / ${total}` : `${humanColor ? 'あなたの' : ''}悪手・敗着 ${mistakes.length}手`}
             {result ? ` · ${resultLabel(result)}` : ''}

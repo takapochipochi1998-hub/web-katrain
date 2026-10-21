@@ -28,10 +28,10 @@ export const ScoreGraph: React.FC<Props> = ({ series, verdicts, currentMove, onS
   const area = points.length > 1 ? `M0,${mid} L${points.join(' L')} L${x(series.length - 1)},${mid} Z` : '';
 
   const lastPicked = useRef<number | null>(null);
-  const pick = (e: React.PointerEvent<SVGSVGElement>) => {
+  const pick = (e: React.PointerEvent<SVGSVGElement> | React.MouseEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const n = Math.max(0, Math.min(last, Math.round(((e.clientX - rect.left) / rect.width) * last)));
-    if (n === lastPicked.current && e.type === 'pointermove') return;
+    if (n === lastPicked.current && e.type !== 'pointerdown') return;
     lastPicked.current = n;
     onSelect(n);
   };
@@ -44,10 +44,14 @@ export const ScoreGraph: React.FC<Props> = ({ series, verdicts, currentMove, onS
       aria-label="形勢グラフ"
       // Press and slide: the move follows the finger. The graph takes the touch, so it does not scroll the page.
       onPointerDown={(e) => {
-        e.currentTarget.setPointerCapture(e.pointerId);
+        // Move first: on a phone a quick tap can lift before capture is set, and
+        // setPointerCapture then throws, which used to swallow the tap.
         pick(e);
+        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* the tap still counted */ }
       }}
       onPointerMove={(e) => { if (e.currentTarget.hasPointerCapture(e.pointerId)) pick(e); }}
+      // A plain tap as a backstop, should the browser not deliver the pointer events.
+      onClick={(e) => pick(e)}
     >
       <rect width={W} height={H} fill="var(--s-surface-2)" />
       <rect width={W} height={mid} fill="var(--s-surface)" />
