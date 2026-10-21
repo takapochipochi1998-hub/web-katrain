@@ -247,6 +247,8 @@ export interface GameSettings {
   // rank as it is (gtp_human5k_example.cfg), 'search' backs it with the search
   // (gtp_human9d_search_example.cfg).
   humanSlBotStyle: 'imitate' | 'search';
+  /** 0..1: play below the human net's weakest rank (20k) by flattening its choice; see weakenHumanPreset. */
+  aiHumanWeakness: number;
   analysisPolicySource: 'engine' | 'human'; // which policy the R overlay draws
   teachNumUndoPrompts: number[]; // KaTrain trainer/num_undo_prompts
 

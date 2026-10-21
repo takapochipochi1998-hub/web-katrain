@@ -42,9 +42,24 @@ const AUTO_REPLY_MIN_VISITS = 64;
 
 const isPass = (m: { x: number } | null | undefined) => !!m && m.x < 0;
 
+/**
+ * Make sure the game line has scores (a quick pass: one network evaluation per
+ * position is enough for the graph and the mistake list) and that the position
+ * on screen is being read in depth.
+ */
+function refreshAnalysis(): void {
+  const store = useGameStore.getState();
+  if (!store.isAnalysisMode) store.toggleAnalysisMode();
+  if (!store.isGameAnalysisRunning && mainLine(store.rootNode).some((node) => !node.analysis)) {
+    useGameStore.getState().startQuickGameAnalysis();
+  }
+  void useGameStore.getState().runAnalysis({ ifIdle: true });
+}
+
 /** Try-out moves the player made, and those the engine has already answered. */
 const playerTryouts = new WeakSet<GameNode>();
 const answeredTryouts = new WeakSet<GameNode>();
+let lastReviewedRoot: GameNode | null = null;
 
 type Props = {
   title: string;
@@ -82,18 +97,29 @@ export const ReviewScreen: React.FC<Props> = ({ title, playerRank, onPlayerRankC
     const store = useGameStore.getState();
     useGameStore.setState({ isAiPlaying: false, aiColor: null });
     if (!store.isAnalysisMode) store.toggleAnalysisMode();
-    store.navigateStart();
-    if (mainLine(store.rootNode).some((node) => !node.analysis)) store.startFastGameAnalysis();
+    // Coming back to the same game keeps the place; a different game starts at move 0.
+    if (lastReviewedRoot !== store.rootNode) store.navigateStart();
+    lastReviewedRoot = store.rootNode;
   }, []);
 
   // "打ち手の級位": read each position with the human net at the player's rank too.
+  // Changing it wipes every analysis in the tree (web-katrain treats it as an
+  // engine change), so the quick pass is started after it, never before.
   useEffect(() => {
     const store = useGameStore.getState();
     const profile = humanProfileFor(playerRank);
-    if (store.settings.humanSlEnabled && store.settings.humanSlProfile === profile) return;
-    store.updateSettings({ humanSlEnabled: true, humanSlProfile: profile });
-    void useGameStore.getState().runAnalysis({ force: true });
+    if (!store.settings.humanSlEnabled || store.settings.humanSlProfile !== profile) {
+      store.updateSettings({ humanSlEnabled: true, humanSlProfile: profile });
+    }
+    refreshAnalysis();
   }, [playerRank]);
+
+  // Read every position as it comes on screen. Stepping one move does this in the
+  // store, but jumping (graph, mistakes, back to the game) does not, and the quick
+  // pass leaves positions with a score but no candidates.
+  useEffect(() => {
+    void useGameStore.getState().runAnalysis({ ifIdle: true });
+  }, [currentNode.id]);
 
   // treeVersion: analysis lands on nodes in place, so derive again when it moves.
   const line = useMemo(() => mainLine(rootNode), [rootNode, treeVersion]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -269,7 +295,7 @@ export const ReviewScreen: React.FC<Props> = ({ title, playerRank, onPlayerRankC
               <Segmented
                 options={DEPTHS}
                 value={(DEPTHS.find((d) => d.value === katagoVisits)?.value ?? 1000) as Depth}
-                onChange={(v) => useGameStore.getState().updateSettings({ katagoVisits: v })}
+                onChange={(v) => { useGameStore.getState().updateSettings({ katagoVisits: v }); refreshAnalysis(); }}
                 label="読みの深さ"
               />
             </div>

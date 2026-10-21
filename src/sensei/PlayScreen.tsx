@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { BoardSize, Player } from '../types';
+import type { BoardSize } from '../types';
 import { RankHistoryChart, RankPicker } from './RankPicker';
 import { rankLabel, setRank, shiftRank, type Rank, type RankBook, type RankedBoardSize } from './rankLadder';
 import type { GameConfig, SessionMeta } from './session';
@@ -14,7 +14,6 @@ const TAB_OPTIONS: ReadonlyArray<{ value: Tab; label: string }> = [
   { value: 'free', label: '自由対局' },
 ];
 
-const COLOR_OPTIONS = [{ value: 'black', label: '黒（先手）' }, { value: 'white', label: '白（後手）' }] as const;
 const KOMI_FOR_HANDICAP = (handicap: number) => (handicap > 0 ? 0.5 : 6.5);
 
 type Props = {
@@ -70,7 +69,6 @@ export const PlayScreen: React.FC<Props> = ({ ranks, onRanksChange, onStart, ong
 const RankedPanel: React.FC<Pick<Props, 'ranks' | 'onRanksChange' | 'onStart'> & { size: RankedBoardSize }> = ({ size, ranks, onRanksChange, onStart }) => {
   const state = ranks[size];
   const [initial, setInitial] = useState<Rank>('10k');
-  const [humanColor, setHumanColor] = useState<Player>('black');
 
   if (!state.rank) {
     return (
@@ -98,14 +96,10 @@ const RankedPanel: React.FC<Pick<Props, 'ranks' | 'onRanksChange' | 'onStart'> &
           </div>
           <div className="sensei-muted text-right">{wins}勝 {losses}敗</div>
         </div>
-        <div className="sensei-row">
-          <span>手番</span>
-          <Segmented options={COLOR_OPTIONS} value={humanColor} onChange={setHumanColor} label="手番" />
-        </div>
         <button
           type="button"
           className="sensei-primary sensei-block"
-          onClick={() => onStart({ kind: 'ranked', size, aiRank: rank, humanColor, handicap: 0, komi: 6.5 })}
+          onClick={() => onStart({ kind: 'ranked', size, aiRank: rank, handicap: 0, komi: 6.5 })}
         >
           AI {rankLabel(rank)}と対局する
         </button>
@@ -134,7 +128,6 @@ const RankedPanel: React.FC<Pick<Props, 'ranks' | 'onRanksChange' | 'onStart'> &
 const FreeGameForm: React.FC<{ onStart: (config: GameConfig) => void }> = ({ onStart }) => {
   const [size, setSize] = useState<BoardSize>(19);
   const [aiRank, setAiRank] = useState<Rank>('5k');
-  const [humanColor, setHumanColor] = useState<Player>('black');
   const [showDetails, setShowDetails] = useState(false);
   const [handicap, setHandicap] = useState(0);
   const [komi, setKomi] = useState(6.5);
@@ -155,10 +148,7 @@ const FreeGameForm: React.FC<{ onStart: (config: GameConfig) => void }> = ({ onS
         <label htmlFor="sensei-ai-rank">AIの棋力</label>
         <RankPicker id="sensei-ai-rank" value={aiRank} onChange={setAiRank} />
       </div>
-      <div className="sensei-row">
-        <span>手番</span>
-        <Segmented options={COLOR_OPTIONS} value={humanColor} onChange={setHumanColor} label="手番" />
-      </div>
+      <p className="sensei-muted">手番（黒・白）は対局ごとにランダムに決まります。</p>
       <button type="button" className="sensei-ghost self-start !px-0" onClick={() => setShowDetails((v) => !v)}>
         詳細設定 {showDetails ? '▲' : '▼'}
       </button>
@@ -185,7 +175,7 @@ const FreeGameForm: React.FC<{ onStart: (config: GameConfig) => void }> = ({ onS
       <button
         type="button"
         className="sensei-primary sensei-block"
-        onClick={() => onStart({ kind: 'free', size, aiRank, humanColor, handicap, komi })}
+        onClick={() => onStart({ kind: 'free', size, aiRank, handicap, komi })}
       >
         対局開始
       </button>

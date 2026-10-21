@@ -132,6 +132,15 @@ describe('sound helpers', () => {
         start: () => {},
         stop: () => {},
       });
+      sampleRate = 8000;
+      createBuffer = () => ({ getChannelData: () => new Float32Array(8) });
+      createBufferSource = () => ({ connect: () => {}, buffer: null, start: () => {}, stop: () => {} });
+      createBiquadFilter = () => ({
+        connect: () => {},
+        type: 'bandpass',
+        frequency: { setValueAtTime: () => {} },
+        Q: { setValueAtTime: () => {} },
+      });
       createGain = () => ({
         connect: () => {},
         gain: {
@@ -171,6 +180,15 @@ describe('sound helpers', () => {
         },
         start,
         stop: () => {},
+      });
+      sampleRate = 8000;
+      createBuffer = () => ({ getChannelData: () => new Float32Array(8) });
+      createBufferSource = () => ({ connect: () => {}, buffer: null, start: () => {}, stop: () => {} });
+      createBiquadFilter = () => ({
+        connect: () => {},
+        type: 'bandpass',
+        frequency: { setValueAtTime: () => {} },
+        Q: { setValueAtTime: () => {} },
       });
       createGain = () => ({
         connect: () => {},
@@ -215,6 +233,15 @@ describe('sound helpers', () => {
         start,
         stop: () => {},
       });
+      sampleRate = 8000;
+      createBuffer = () => ({ getChannelData: () => new Float32Array(8) });
+      createBufferSource = () => ({ connect: () => {}, buffer: null, start: () => {}, stop: () => {} });
+      createBiquadFilter = () => ({
+        connect: () => {},
+        type: 'bandpass',
+        frequency: { setValueAtTime: () => {} },
+        Q: { setValueAtTime: () => {} },
+      });
       createGain = () => ({
         connect: () => {},
         gain: {
@@ -247,6 +274,15 @@ describe('sound helpers', () => {
       createOscillator = () => {
         throw new Error('oscillator blocked');
       };
+      sampleRate = 8000;
+      createBuffer = () => ({ getChannelData: () => new Float32Array(8) });
+      createBufferSource = () => ({ connect: () => {}, buffer: null, start: () => {}, stop: () => {} });
+      createBiquadFilter = () => ({
+        connect: () => {},
+        type: 'bandpass',
+        frequency: { setValueAtTime: () => {} },
+        Q: { setValueAtTime: () => {} },
+      });
       createGain = () => ({
         connect: () => {},
         gain: {

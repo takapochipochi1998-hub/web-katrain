@@ -6,7 +6,7 @@ import { useGameStore } from '../store/gameStore';
 import type { BoardSize, GameNode, Player } from '../types';
 import { parseSgf } from '../utils/sgf';
 import { sgfForPath } from './sgfPath';
-import { humanProfileFor, isRank, rankLabel, type Rank } from './rankLadder';
+import { humanProfileFor, humanWeaknessFor, isRank, rankLabel, type Rank } from './rankLadder';
 import { readLocalStorage, removeLocalStorage, writeLocalStorage } from '../utils/storage';
 
 export type GameKind = 'ranked' | 'free';
@@ -25,12 +25,26 @@ export type GameConfig = {
   kind: GameKind;
   size: BoardSize;
   aiRank: Rank;
-  humanColor: Player;
   handicap: number;
   komi: number;
 };
 
+/** Colours are drawn at random, except that handicap stones are the player's. */
+export function drawHumanColor(handicap: number, random: () => number = Math.random): Player {
+  if (handicap > 0) return 'black';
+  return random() < 0.5 ? 'black' : 'white';
+}
+
 const STORAGE_KEY = 'web-katrain:sensei-session:v1';
+
+/**
+ * The tree the simple mode put in the store. The detail mode shares the store
+ * and can replace the game at any time; anything else in the store is not ours
+ * to resume, save or count.
+ */
+let ownRoot: GameNode | null = null;
+const claimStoreGame = () => { ownRoot = useGameStore.getState().rootNode; };
+export const ownsStoreGame = (): boolean => ownRoot !== null && useGameStore.getState().rootNode === ownRoot;
 
 export function loadSession(): SessionMeta | null {
   try {
@@ -59,19 +73,21 @@ export function saveSession(meta: SessionMeta | null): void {
 
 export function startGame(config: GameConfig): SessionMeta {
   const store = useGameStore.getState();
-  const aiColor: Player = config.humanColor === 'black' ? 'white' : 'black';
+  const humanColor = drawHumanColor(config.handicap);
+  const aiColor: Player = humanColor === 'black' ? 'white' : 'black';
   // The detail mode shares this store; its teach mode would take back our moves.
   if (store.isTeachMode) store.toggleTeachMode();
   if (store.isContinuousAnalysis) store.toggleContinuousAnalysis(true);
   if (useGameStore.getState().isAnalysisMode) useGameStore.getState().toggleAnalysisMode();
   store.startNewGame({ komi: config.komi, rules: 'japanese', boardSize: config.size, handicap: config.handicap });
   const aiName = `AI ${rankLabel(config.aiRank)}`;
-  store.setRootProperty('PB', config.humanColor === 'black' ? 'あなた' : aiName);
-  store.setRootProperty('PW', config.humanColor === 'white' ? 'あなた' : aiName);
+  store.setRootProperty('PB', humanColor === 'black' ? 'あなた' : aiName);
+  store.setRootProperty('PW', humanColor === 'white' ? 'あなた' : aiName);
   store.setRootProperty(aiColor === 'black' ? 'BR' : 'WR', config.aiRank);
   store.updateSettings({
     aiStrategy: 'human',
     humanSlProfile: humanProfileFor(config.aiRank),
+    aiHumanWeakness: humanWeaknessFor(config.aiRank),
     timerMainTimeMinutes: 0,
     timerByoLengthSeconds: 0,
     timerByoPeriods: 0,
@@ -79,12 +95,13 @@ export function startGame(config: GameConfig): SessionMeta {
   });
   useGameStore.setState({ isAiPlaying: true, aiColor });
   if (useGameStore.getState().currentPlayer === aiColor) useGameStore.getState().scheduleAiMove(300);
+  claimStoreGame();
 
   const meta: SessionMeta = {
     kind: config.kind,
     size: config.size,
     aiRank: config.aiRank,
-    humanColor: config.humanColor,
+    humanColor: humanColor,
     startedAt: Date.now(),
     rankRecorded: false,
   };
@@ -99,7 +116,7 @@ function resumeBot(meta: SessionMeta): void {
   if (store.isContinuousAnalysis) store.toggleContinuousAnalysis(true);
   if (useGameStore.getState().isAnalysisMode) useGameStore.getState().toggleAnalysisMode();
   const aiColor: Player = meta.humanColor === 'black' ? 'white' : 'black';
-  store.updateSettings({ aiStrategy: 'human', humanSlProfile: humanProfileFor(meta.aiRank) });
+  store.updateSettings({ aiStrategy: 'human', humanSlProfile: humanProfileFor(meta.aiRank), aiHumanWeakness: humanWeaknessFor(meta.aiRank) });
   useGameStore.setState({ isAiPlaying: true, aiColor });
   if (useGameStore.getState().currentPlayer === aiColor) useGameStore.getState().scheduleAiMove(300);
 }
@@ -110,6 +127,7 @@ export function loadSgfToEnd(sgf: string): void {
   useGameStore.setState({ isAiPlaying: false, aiColor: null });
   store.loadGame(parseSgf(sgf));
   useGameStore.getState().navigateEnd();
+  claimStoreGame();
 }
 
 export function resumeGame(meta: SessionMeta, sgf: string): void {

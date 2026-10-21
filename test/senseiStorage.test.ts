@@ -4,6 +4,7 @@ import { answersFrom, createProblem, isCorrect, nextProblem, recordAttempt, same
 import { parsePreferences } from '../src/sensei/preferences';
 import { parseSavedGames, removeGame, upsertGame, type SavedGame } from '../src/sensei/savedGames';
 import { sgfForPath } from '../src/sensei/sgfPath';
+import { drawHumanColor } from '../src/sensei/session';
 
 const cand = (x: number, y: number, pointsLost: number): CandidateMove =>
   ({ x, y, pointsLost, winRate: 0.5, scoreLead: 0, visits: 10, order: 0 });
@@ -76,5 +77,13 @@ describe('problem answers', () => {
   it('keeps at most five answers', () => {
     const many = Array.from({ length: 9 }, (_, i) => cand(i, 0, 0));
     expect(answersFrom(many)).toHaveLength(5);
+  });
+});
+
+describe('colour draw', () => {
+  it('gives handicap stones to the player and draws otherwise', () => {
+    expect(drawHumanColor(3, () => 0.9)).toBe('black');
+    expect(drawHumanColor(0, () => 0.2)).toBe('black');
+    expect(drawHumanColor(0, () => 0.8)).toBe('white');
   });
 });

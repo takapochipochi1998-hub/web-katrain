@@ -166,97 +166,97 @@ const runSound = (key: SoundEffectKey, play: (ctx: AudioContext) => void) => {
     playWithSoundErrorHandling(play, audio.ctx);
 };
 
+/*
+ * Go sounds, synthesised so they work offline: a slate stone landing on a kaya
+ * board is a very short, bright click (noise through a band-pass filter) over a
+ * brief woody knock (a low sine that drops in pitch). Small random variations
+ * keep a run of moves from sounding mechanical.
+ */
+const noiseBuffers = new WeakMap<AudioContext, AudioBuffer>();
+
+const getNoiseBuffer = (ctx: AudioContext): AudioBuffer => {
+    const cached = noiseBuffers.get(ctx);
+    if (cached) return cached;
+    const length = Math.floor(ctx.sampleRate * 0.25);
+    const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+    noiseBuffers.set(ctx, buffer);
+    return buffer;
+};
+
+/** A short filtered noise burst: the hard "パチ" of stone on wood. */
+const playClick = (ctx: AudioContext, at: number, opts: { freq: number; q: number; gain: number; decay: number }) => {
+    const source = ctx.createBufferSource();
+    source.buffer = getNoiseBuffer(ctx);
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(opts.freq, at);
+    filter.Q.setValueAtTime(opts.q, at);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(opts.gain, at);
+    gain.gain.exponentialRampToValueAtTime(0.0008, at + opts.decay);
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    source.start(at, Math.random() * 0.2);
+    source.stop(at + opts.decay + 0.01);
+};
+
+/** A low knock that falls in pitch: the board answering the stone. */
+const playKnock = (ctx: AudioContext, at: number, opts: { from: number; to: number; gain: number; decay: number }) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(opts.from, at);
+    osc.frequency.exponentialRampToValueAtTime(opts.to, at + opts.decay);
+    gain.gain.setValueAtTime(opts.gain, at);
+    gain.gain.exponentialRampToValueAtTime(0.0008, at + opts.decay);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(at);
+    osc.stop(at + opts.decay + 0.01);
+};
+
+const vary = (value: number, spread: number) => value * (1 + (Math.random() * 2 - 1) * spread);
+
 export const playStoneSound = () => {
     runSound('stone', (ctx) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-
-        // Stone placement: sharp attack, quick decay, woody.
-        // Triangle wave pitched down quickly.
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(800, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.1);
-
-        gain.gain.setValueAtTime(0.5, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
-
-        osc.start();
-        osc.stop(ctx.currentTime + 0.1);
+        const now = ctx.currentTime;
+        playKnock(ctx, now, { from: vary(320, 0.08), to: 140, gain: 0.55, decay: 0.075 });
+        playClick(ctx, now, { freq: vary(3200, 0.12), q: 1.4, gain: 0.9, decay: 0.035 });
+        playClick(ctx, now + 0.002, { freq: vary(1300, 0.1), q: 2.5, gain: 0.35, decay: 0.06 });
     });
 };
 
 export const playCaptureSound = (count: number) => {
     runSound('capture', (ctx) => {
-        // Capture: rattling stones. Multiple short clicks.
-        // We play 'count' clicks with slight random delay.
-        const clicks = Math.min(count, 5); // Limit to 5 clicks to avoid chaos
-
-        const now = ctx.currentTime;
-
+        // Prisoners lifted off the board and dropped together: light stone-on-stone clicks.
+        const clicks = Math.min(Math.max(count, 1), 5) + 1;
+        const now = ctx.currentTime + 0.12;
         for (let i = 0; i < clicks; i++) {
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-
-            const startTime = now + (Math.random() * 0.1) + (i * 0.05);
-
-            osc.type = 'square'; // harsher sound for stone collision
-            osc.frequency.setValueAtTime(1200 + Math.random() * 500, startTime);
-            osc.frequency.exponentialRampToValueAtTime(100, startTime + 0.05);
-
-            gain.gain.setValueAtTime(0.3, startTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.05);
-
-            osc.start(startTime);
-            osc.stop(startTime + 0.05);
+            const at = now + i * 0.045 + Math.random() * 0.03;
+            playClick(ctx, at, { freq: vary(4200, 0.15), q: 3, gain: 0.35, decay: 0.025 });
         }
     });
 };
 
 export const playPassSound = () => {
     runSound('pass', (ctx) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-
-        // Pass: Soft bell or ding
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(440, ctx.currentTime); // A4
-        osc.frequency.exponentialRampToValueAtTime(220, ctx.currentTime + 0.5);
-
-        gain.gain.setValueAtTime(0.3, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
-
-        osc.start();
-        osc.stop(ctx.currentTime + 0.5);
+        // A soft tap on the bowl lid rather than a stone on the board.
+        const now = ctx.currentTime;
+        playKnock(ctx, now, { from: 220, to: 110, gain: 0.35, decay: 0.12 });
+        playClick(ctx, now, { freq: 900, q: 1.2, gain: 0.25, decay: 0.05 });
     });
 };
 
 export const playNewGameSound = () => {
     runSound('new-game', (ctx) => {
-        // Upward chime
+        // Two stones set down, as when nigiri decides the colours.
         const now = ctx.currentTime;
-        [440, 554, 659].forEach((freq, i) => {
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-
-            const startTime = now + i * 0.1;
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(freq, startTime);
-
-            gain.gain.setValueAtTime(0.2, startTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.3);
-
-            osc.start(startTime);
-            osc.stop(startTime + 0.3);
+        [0, 0.16].forEach((offset) => {
+            playKnock(ctx, now + offset, { from: 300, to: 140, gain: 0.4, decay: 0.07 });
+            playClick(ctx, now + offset, { freq: 3000, q: 1.4, gain: 0.6, decay: 0.035 });
         });
     });
 };

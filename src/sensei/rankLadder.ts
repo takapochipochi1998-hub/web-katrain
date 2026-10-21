@@ -1,11 +1,13 @@
 /**
  * Ranked play: one rank per board size, moved one step by each result.
- * The ladder is the 29 ranks KataGo's human SL net knows, 20k up to 9d.
+ * The ladder runs 30k to 9d like AI Sensei. KataGo's human SL net knows 20k to
+ * 9d; below that the bot plays the 20k profile, loosened (see humanWeaknessFor).
  */
 import type { BoardSize } from '../types';
 import { readLocalStorage, writeLocalStorage } from '../utils/storage';
 
 export const RANKS = [
+  '30k', '29k', '28k', '27k', '26k', '25k', '24k', '23k', '22k', '21k',
   '20k', '19k', '18k', '17k', '16k', '15k', '14k', '13k', '12k', '11k',
   '10k', '9k', '8k', '7k', '6k', '5k', '4k', '3k', '2k', '1k',
   '1d', '2d', '3d', '4d', '5d', '6d', '7d', '8d', '9d',
@@ -69,8 +71,20 @@ export function setRank(book: RankBook, size: RankedBoardSize, rank: Rank): Rank
   return { ...book, [size]: { ...book[size], rank } };
 }
 
-/** KataGo's human SL profile for a rank, e.g. '5k' -> 'rank_5k'. */
-export const humanProfileFor = (rank: Rank): string => `rank_${rank}`;
+const WEAKEST_HUMAN_KYU = 20;
+const kyuOf = (rank: Rank): number | null => (rank.endsWith('k') ? Number.parseInt(rank, 10) : null);
+
+/** KataGo's human SL profile for a rank, e.g. '5k' -> 'rank_5k'; 21k-30k use rank_20k. */
+export function humanProfileFor(rank: Rank): string {
+  const kyu = kyuOf(rank);
+  return kyu !== null && kyu > WEAKEST_HUMAN_KYU ? `rank_${WEAKEST_HUMAN_KYU}k` : `rank_${rank}`;
+}
+
+/** 0 at 20k and stronger, rising to 1 at 30k. */
+export function humanWeaknessFor(rank: Rank): number {
+  const kyu = kyuOf(rank);
+  return kyu !== null && kyu > WEAKEST_HUMAN_KYU ? (kyu - WEAKEST_HUMAN_KYU) / 10 : 0;
+}
 
 /** '5k' -> '5級', '1d' -> '初段', '3d' -> '3段'. */
 export function rankLabel(rank: Rank): string {

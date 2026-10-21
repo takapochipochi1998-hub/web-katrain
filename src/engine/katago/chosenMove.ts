@@ -281,3 +281,20 @@ export function blendHumanChosenMove(args: {
   }
   return values;
 }
+
+/**
+ * Play weaker than the human net's weakest profile (20k). `weakness` 0..1 raises
+ * the choice temperature and lets it reshape every move, not only the unlikely
+ * ones, so the bot keeps human-looking candidates but picks among them loosely.
+ * Not calibrated against real players.
+ */
+export function weakenHumanPreset(preset: HumanBotPreset, weakness: number): HumanBotPreset {
+  const w = Number.isFinite(weakness) ? Math.max(0, Math.min(1, weakness)) : 0;
+  if (w === 0) return preset;
+  return {
+    ...preset,
+    temperature: preset.temperature + w * 1.3,
+    temperatureEarly: preset.temperatureEarly + w * 1.3,
+    temperatureOnlyBelowProb: 1,
+  };
+}

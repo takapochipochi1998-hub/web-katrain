@@ -18,6 +18,7 @@ import { gameIdFor, loadSavedGames, removeGame, storeSavedGames, upsertGame, typ
 import {
   loadSession,
   loadSgfToEnd,
+  ownsStoreGame,
   resumeGame,
   saveSession,
   startFromPosition,
@@ -58,7 +59,15 @@ function snapshot(meta: SessionMeta, previous: SavedGame | undefined): SavedGame
 /** The AI Sensei-style shell: play against the bot, review, practise. */
 export const SenseiApp: React.FC = () => {
   const [ranks, setRanks] = useState<RankBook>(() => loadRankBook());
-  const [meta, setMeta] = useState<SessionMeta | null>(() => loadSession());
+  const [meta, setMeta] = useState<SessionMeta | null>(() => {
+    // A session with no saved game behind it is a leftover from an older build.
+    const session = loadSession();
+    if (session && !loadSavedGames().some((g) => g.id === gameIdFor(session))) {
+      saveSession(null);
+      return null;
+    }
+    return session;
+  });
   const [games, setGames] = useState<SavedGame[]>(() => loadSavedGames());
   const [problems, setProblems] = useState<Problem[]>(() => loadProblems());
   const [prefs, setPrefs] = useState<Preferences>(() => loadPreferences());
@@ -83,9 +92,7 @@ export const SenseiApp: React.FC = () => {
   useEffect(() => {
     if (!meta) return;
     const saved = loadSavedGames().find((g) => g.id === gameIdFor(meta));
-    if (saved && !saved.result && useGameStore.getState().rootNode.children.length === 0) {
-      resumeGame(meta, saved.sgf);
-    }
+    if (saved && !saved.result) resumeGame(meta, saved.sgf);
     // Only on start.
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -100,7 +107,8 @@ export const SenseiApp: React.FC = () => {
     });
     const unsubscribe = useGameStore.subscribe((state, prev) => {
       if (state.treeVersion === prev.treeVersion && state.rootNode === prev.rootNode) return;
-      if (state.rootNode.children.length === 0) return;
+      // Never file the detail mode's game under this one.
+      if (state.rootNode.children.length === 0 || !ownsStoreGame()) return;
       clearTimeout(timer);
       timer = setTimeout(save, 800);
     });
@@ -127,7 +135,7 @@ export const SenseiApp: React.FC = () => {
   const openGame = (game: SavedGame) => {
     setMeta(game.meta);
     saveSession(game.meta);
-    setLastConfig({ kind: game.meta.kind, size: game.meta.size, aiRank: game.meta.aiRank, humanColor: game.meta.humanColor, handicap: 0, komi: 6.5 });
+    setLastConfig({ kind: game.meta.kind, size: game.meta.size, aiRank: game.meta.aiRank, handicap: 0, komi: 6.5 });
     if (game.result) {
       loadSgfToEnd(game.sgf);
       setView('review');
@@ -135,6 +143,17 @@ export const SenseiApp: React.FC = () => {
       resumeGame(game.meta, game.sgf);
       setView('game');
     }
+  };
+
+  /** Back to the game in progress, reloading it if the detail mode replaced the board. */
+  const resume = () => {
+    if (!meta) return;
+    if (!ownsStoreGame()) {
+      const saved = games.find((g) => g.id === gameIdFor(meta));
+      if (!saved) { saveSession(null); setMeta(null); setToast('続きの対局が見つかりませんでした'); return; }
+      resumeGame(meta, saved.sgf);
+    }
+    setView('game');
   };
 
   const addProblem = (node: GameNode) => {
@@ -155,7 +174,8 @@ export const SenseiApp: React.FC = () => {
   };
 
   const playFromHere = (node: GameNode) => {
-    const rank = meta?.aiRank ?? '5k';
+    // Play the position against a bot of the player's own strength.
+    const rank = reviewRank;
     const next = startFromPosition(node, rank);
     setMeta(next);
     setLastConfig(null);
@@ -198,7 +218,7 @@ export const SenseiApp: React.FC = () => {
       />
     );
   } else if (tab === 'play') {
-    content = <PlayScreen ranks={ranks} onRanksChange={updateRanks} onStart={begin} ongoing={ongoing} onResume={() => setView('game')} />;
+    content = <PlayScreen ranks={ranks} onRanksChange={updateRanks} onStart={begin} ongoing={ongoing} onResume={resume} />;
   } else if (tab === 'games') {
     content = (
       <GamesScreen

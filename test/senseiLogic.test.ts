@@ -4,6 +4,7 @@ import { outcomeFor, parseResult, resultFromScoreLead, resultLabel } from '../sr
 import {
   emptyRankBook,
   humanProfileFor,
+  humanWeaknessFor,
   parseRankBook,
   rankAfter,
   rankLabel,
@@ -33,7 +34,8 @@ describe('rank ladder', () => {
     expect(rankAfter('5k', 'loss')).toBe('6k');
     expect(rankAfter('5k', 'draw')).toBe('5k');
     expect(rankAfter('9d', 'win')).toBe('9d');
-    expect(rankAfter('20k', 'loss')).toBe('20k');
+    expect(rankAfter('20k', 'loss')).toBe('21k');
+    expect(rankAfter('30k', 'loss')).toBe('30k');
   });
 
   it('keeps each board size apart and logs the change', () => {
@@ -54,10 +56,14 @@ describe('rank ladder', () => {
     expect(rankLabel('1d')).toBe('初段');
     expect(rankLabel('3d')).toBe('3段');
     expect(humanProfileFor('1d')).toBe('rank_1d');
+    expect(humanProfileFor('25k')).toBe('rank_20k');
+    expect(humanWeaknessFor('20k')).toBe(0);
+    expect(humanWeaknessFor('25k')).toBe(0.5);
+    expect(humanWeaknessFor('30k')).toBe(1);
   });
 
   it('drops stored values that no longer make sense', () => {
-    const book = parseRankBook({ 9: { rank: '5k', history: [{ at: 1, outcome: 'win', before: '6k', after: '5k' }, { bad: true }] }, 13: { rank: '30k' } });
+    const book = parseRankBook({ 9: { rank: '5k', history: [{ at: 1, outcome: 'win', before: '6k', after: '5k' }, { bad: true }] }, 13: { rank: '31k' } });
     expect(book[9].rank).toBe('5k');
     expect(book[9].history).toHaveLength(1);
     expect(book[13].rank).toBeNull();

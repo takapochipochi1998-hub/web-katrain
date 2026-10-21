@@ -47,7 +47,7 @@ import {
 import { ensurePinGameId, getNodePath, getPinGameId, PIN_GAME_ID_PROP, repathPinnedVariations, resolvePinnedVariation, restorePinnedVariations, writeStoredPinnedVariations, type PinnedVariation } from '../utils/pinnedVariations';
 import { describeHumanBotPick, pickHumanBotMove } from '../utils/humanBotMove';
 import { komiWithHandicapBonus } from '../utils/handicap';
-import { humanBotPresets } from '../engine/katago/chosenMove';
+import { humanBotPresets, weakenHumanPreset } from '../engine/katago/chosenMove';
 import {
   countMoveTreeDescendants,
   expandAllMoveTreeBranches,
@@ -506,7 +506,7 @@ export function normalizeStoredSettings(
       'showLastNMistakes', 'mistakeThreshold', 'animPvTimeSeconds', 'animPvMoves',
       'trainerLowVisits', 'katagoVisits', 'katagoFastVisits', 'aiMoveVisits', 'katagoMaxTimeMs',
       'katagoBatchSize', 'katagoMaxChildren', 'katagoTopK', 'katagoWideRootNoise',
-      'katagoRootPolicyTemperature', 'katagoAnalysisPvLen',
+      'katagoRootPolicyTemperature', 'katagoAnalysisPvLen', 'aiHumanWeakness',
     ] as const satisfies ReadonlyArray<keyof GameSettings>;
     const numericFields = parsed as Record<string, unknown>;
     for (const key of numericSettings) {
@@ -1422,6 +1422,7 @@ const defaultSettings: GameSettings = {
   humanSlModelUrl: publicUrl(KATAGO_HUMAN_MODEL_PATH),
   humanSlProfile: KATAGO_HUMAN_PROFILE_DEFAULT,
   humanSlBotStyle: 'imitate',
+  aiHumanWeakness: 0,
   analysisPolicySource: 'engine',
   teachNumUndoPrompts: [1, 1, 1, 0.5, 0, 0],
 
@@ -4853,7 +4854,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
                   candidates,
                   playerToMove: playerAtStart,
                   turnNumber: latest.moveHistory.length,
-                  params: humanBotPresets[settings.humanSlBotStyle],
+                  params: weakenHumanPreset(humanBotPresets[settings.humanSlBotStyle], settings.aiHumanWeakness),
                   isLegal: (x, y) => isValidMove(latest.board, x, y, playerAtStart, koReferenceBoard(node)),
                 });
                 if (pick) {
