@@ -34,7 +34,7 @@ describe('device sync merge', () => {
     const phone = recordResult(setRank(emptyRankBook(), 9, '10k', 100), 9, 'win', 200);
     const pc = recordResult(setRank(emptyRankBook(), 9, '10k', 100), 9, 'loss', 300);
     const merged = mergeRanks(phone, pc);
-    expect(merged[9].rank).toBe('11k');
+    expect(merged[9].rating).toBe(2980);
     expect(merged[9].history.map((h) => h.at)).toEqual([200, 300]);
   });
 });

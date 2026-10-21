@@ -12,7 +12,7 @@ import { ReviewScreen } from './ReviewScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { createProblem, loadProblems, recordAttempt, sameProblem, storeProblems, type Problem } from './problems';
 import { loadPreferences, storePreferences, type Preferences } from './preferences';
-import { loadRankBook, rankLabel, saveRankBook, type Rank, type RankBook } from './rankLadder';
+import { loadRankBook, rankForRating, rankLabel, ratingOf, saveRankBook, type Rank, type RankBook } from './rankLadder';
 import { mainLine } from './reviewModel';
 import { gameIdFor, loadSavedGames, removeGame, storeSavedGames, upsertGame, type SavedGame } from './savedGames';
 import {
@@ -197,7 +197,8 @@ export const SenseiApp: React.FC = () => {
   const replay = () => {
     if (!lastConfig) { setView(null); setTab('play'); return; }
     // A ranked rematch is against whatever rank the last result left.
-    const rank = lastConfig.kind === 'ranked' ? ranks[lastConfig.size as 9 | 13 | 19].rank ?? lastConfig.aiRank : lastConfig.aiRank;
+    const rating = lastConfig.kind === 'ranked' ? ratingOf(ranks[lastConfig.size as 9 | 13 | 19]) : null;
+    const rank = rating !== null ? rankForRating(rating) : lastConfig.aiRank;
     begin({ ...lastConfig, aiRank: rank });
   };
 

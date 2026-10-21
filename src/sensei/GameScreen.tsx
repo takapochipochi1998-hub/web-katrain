@@ -169,7 +169,7 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
     if (!ended || meta.kind !== 'ranked' || meta.rankRecorded || offRank) return;
     const outcome = outcomeFor(endState, meta.humanColor);
     if (!outcome) return;
-    onRanksChange(recordResult(ranks, size, outcome, Date.now()));
+    onRanksChange(recordResult(ranks, size, outcome, Date.now(), meta.aiRank));
     const updated = { ...meta, rankRecorded: true };
     saveSession(updated);
     onMetaChange(updated);
@@ -191,10 +191,14 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
   const outcome = outcomeFor(endState, meta.humanColor);
   const dialogOpen = ended && dismissedNodeId !== currentNode.id;
   const change = meta.kind === 'ranked' ? ranks[size].history.find((h) => h.at >= meta.startedAt) : undefined;
+  // "レート 3000 → 3020（+20）", and a line when the equivalent rank moved.
+  const ratingChange = change && change.ratingBefore !== undefined && change.ratingAfter !== undefined
+    ? `レート ${change.ratingBefore} → ${change.ratingAfter}（${change.ratingAfter >= change.ratingBefore ? '+' : '−'}${Math.abs(change.ratingAfter - change.ratingBefore)}）`
+    : null;
   const rankChange = change && change.before !== change.after
     ? change.outcome === 'win'
-      ? `おめでとうございます！ 棋力が${rankLabel(change.after)}に昇格しました`
-      : `棋力が${rankLabel(change.after)}に降格しました`
+      ? `おめでとうございます！ ${rankLabel(change.after)}相当になりました`
+      : `${rankLabel(change.after)}相当になりました`
     : null;
   const players: Array<{ color: Player; name: string; captures: number }> = [
     { color: 'black', name: meta.humanColor === 'black' ? 'あなた' : aiName, captures: capturedWhite },
@@ -308,6 +312,7 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
           onClose={() => setDismissedNodeId(currentNode.id)}
         >
           <p className="sensei-result">{resultLabel(endState)}</p>
+          {ratingChange && <p className="sensei-rating-change">{ratingChange}</p>}
           {rankChange && <p className="sensei-promo">{rankChange}</p>}
           {meta.kind === 'ranked' && offRank && (
             <p className="sensei-muted">人間らしいAIのモデルが使えず通常のAIで打ったため、この対局は棋力に反映しません。</p>

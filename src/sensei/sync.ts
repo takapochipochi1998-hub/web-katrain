@@ -73,6 +73,8 @@ function mergeRankState(a: RankState, b: RankState): RankState {
   const newer = lastChange(b) > lastChange(a) ? b : a;
   return {
     rank: newer.rank ?? a.rank ?? b.rank,
+    ...(newer.rating !== undefined ? { rating: newer.rating } : {}),
+    ...(newer.games !== undefined ? { games: newer.games } : {}),
     history: [...history.values()].sort((x, y) => x.at - y.at),
     ...(lastChange(newer) ? { changedAt: lastChange(newer) } : {}),
   };

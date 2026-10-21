@@ -53,7 +53,7 @@ export const GamesScreen: React.FC<Props> = ({ games, onOpen, onImport, onDelete
                           <span className={`sensei-stone sensei-stone-${g.meta.humanColor} sensei-stone-inline`} aria-label={g.meta.humanColor === 'black' ? 'あなたは黒' : 'あなたは白'} />
                         </span>
                         <span className="sensei-muted block">
-                          {dateLabel(g.updatedAt)} · {g.moveCount}手 · {g.meta.kind === 'ranked' ? 'ランク戦' : '自由対局'}
+                          {dateLabel(g.updatedAt)} · {g.moveCount}手 · {g.meta.kind === 'ranked' ? 'ランク戦' : '練習対局'}
                           {g.result ? ` · ${resultLabel(g.result)}` : ''}
                         </span>
                       </span>

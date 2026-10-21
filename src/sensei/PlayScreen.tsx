@@ -1,17 +1,21 @@
 import React, { useState } from 'react';
 import type { BoardSize } from '../types';
 import { RankHistoryChart, RankPicker } from './RankPicker';
-import { rankLabel, setRank, shiftRank, type Rank, type RankBook, type RankedBoardSize } from './rankLadder';
+import { rankForRating, rankLabel, ratingOf, setRank, type Rank, type RankBook, type RankedBoardSize } from './rankLadder';
 import type { GameConfig, SessionMeta } from './session';
 import { Header, Segmented } from './ui';
 
-type Tab = RankedBoardSize | 'free';
+type Tab = 'ranked' | 'free';
 
 const TAB_OPTIONS: ReadonlyArray<{ value: Tab; label: string }> = [
+  { value: 'ranked', label: 'ランク戦' },
+  { value: 'free', label: '練習対局' },
+];
+
+const SIZE_OPTIONS: ReadonlyArray<{ value: RankedBoardSize; label: string }> = [
   { value: 19, label: '19路' },
   { value: 13, label: '13路' },
   { value: 9, label: '9路' },
-  { value: 'free', label: '自由対局' },
 ];
 
 const KOMI_FOR_HANDICAP = (handicap: number) => (handicap > 0 ? 0.5 : 6.5);
@@ -25,9 +29,10 @@ type Props = {
   onResume: () => void;
 };
 
-/** "AIと対局": ranked tabs per board size and a free game form. */
+/** "AIと対局": ranked play (a rating per board size) and practice games. */
 export const PlayScreen: React.FC<Props> = ({ ranks, onRanksChange, onStart, ongoing, onResume }) => {
-  const [tab, setTab] = useState<Tab>(19);
+  const [tab, setTab] = useState<Tab>('ranked');
+  const [size, setSize] = useState<RankedBoardSize>(19);
   return (
     <>
       <Header title="AIと対局" />
@@ -38,7 +43,7 @@ export const PlayScreen: React.FC<Props> = ({ ranks, onRanksChange, onStart, ong
             <span className="sensei-list-main">
               <span className="sensei-list-title">対局を続ける</span>
               <span className="sensei-muted block">
-                {ongoing.size}路 · AI {rankLabel(ongoing.aiRank)} · {ongoing.kind === 'ranked' ? 'ランク戦' : '自由対局'}
+                {ongoing.size}路 · AI {rankLabel(ongoing.aiRank)} · {ongoing.kind === 'ranked' ? 'ランク戦' : '練習対局'}
               </span>
             </span>
             <span aria-hidden>›</span>
@@ -58,9 +63,16 @@ export const PlayScreen: React.FC<Props> = ({ ranks, onRanksChange, onStart, ong
             </button>
           ))}
         </div>
-        {tab === 'free'
-          ? <FreeGameForm onStart={onStart} />
-          : <RankedPanel key={tab} size={tab} ranks={ranks} onRanksChange={onRanksChange} onStart={onStart} />}
+        {tab === 'free' ? (
+          <FreeGameForm onStart={onStart} />
+        ) : (
+          <>
+            <div className="sensei-size-pick">
+              <Segmented options={SIZE_OPTIONS} value={size} onChange={setSize} label="盤の大きさ" />
+            </div>
+            <RankedPanel key={size} size={size} ranks={ranks} onRanksChange={onRanksChange} onStart={onStart} />
+          </>
+        )}
       </div>
     </>
   );
@@ -69,21 +81,23 @@ export const PlayScreen: React.FC<Props> = ({ ranks, onRanksChange, onStart, ong
 const RankedPanel: React.FC<Pick<Props, 'ranks' | 'onRanksChange' | 'onStart'> & { size: RankedBoardSize }> = ({ size, ranks, onRanksChange, onStart }) => {
   const state = ranks[size];
   const [initial, setInitial] = useState<Rank>('10k');
+  const rating = ratingOf(state);
 
-  if (!state.rank) {
+  if (rating === null) {
     return (
       <div className="sensei-card sensei-stack">
         <h2>{size}路のランク戦をはじめる</h2>
-        <p className="sensei-muted">最初の棋力を1回だけ選びます。勝てば1つ強いAI、負ければ1つ弱いAIと次に対局し、自分の棋力に合った相手へ自然に近づきます。</p>
+        <p className="sensei-muted">最初に1回だけ、だいたいの棋力を選びます。そこからレートが始まり、勝てば上がり、負ければ下がります。対局相手はいつも、今のレートに見合うAIです。</p>
         <RankPicker value={initial} onChange={setInitial} />
         <button type="button" className="sensei-primary sensei-block" onClick={() => onRanksChange(setRank(ranks, size, initial))}>
-          {rankLabel(initial)}から始める
+          {rankLabel(initial)}相当から始める
         </button>
       </div>
     );
   }
 
-  const rank = state.rank;
+  // The bot is always the rank the rating stands at.
+  const opponent = rankForRating(rating);
   const wins = state.history.filter((h) => h.outcome === 'win').length;
   const losses = state.history.filter((h) => h.outcome === 'loss').length;
   return (
@@ -91,35 +105,23 @@ const RankedPanel: React.FC<Pick<Props, 'ranks' | 'onRanksChange' | 'onStart'> &
       <div className="sensei-card sensei-stack">
         <div className="flex items-end justify-between">
           <div>
-            <div className="sensei-muted">{size}路の現在の棋力</div>
-            <div className="sensei-big">{rankLabel(rank)}</div>
+            <div className="sensei-muted">{size}路のレート</div>
+            <div className="sensei-big tabular-nums">{rating}</div>
+            <div className="sensei-rank-equiv">{rankLabel(opponent)}相当</div>
           </div>
           <div className="sensei-muted text-right">{wins}勝 {losses}敗</div>
         </div>
         <button
           type="button"
           className="sensei-primary sensei-block"
-          onClick={() => onStart({ kind: 'ranked', size, aiRank: rank, handicap: 0, komi: 6.5 })}
+          onClick={() => onStart({ kind: 'ranked', size, aiRank: opponent, handicap: 0, komi: 6.5 })}
         >
-          AI {rankLabel(rank)}と対局する
+          対局する（相手: AI {rankLabel(opponent)}）
         </button>
       </div>
-      {state.history.length >= 2 && (
-        <div className="sensei-card">
-          <h2>棋力の推移</h2>
-          <RankHistoryChart history={state.history} />
-        </div>
-      )}
       <div className="sensei-card">
-        <h2>棋力の調整</h2>
-        <div className="sensei-toolbar">
-          <button type="button" className="sensei-secondary" onClick={() => onRanksChange(setRank(ranks, size, shiftRank(rank, -1)))}>
-            1つ下げる（{rankLabel(shiftRank(rank, -1))}）
-          </button>
-          <button type="button" className="sensei-secondary" onClick={() => onRanksChange(setRank(ranks, size, shiftRank(rank, 1)))}>
-            1つ上げる（{rankLabel(shiftRank(rank, 1))}）
-          </button>
-        </div>
+        <h2>レートの推移</h2>
+        <RankHistoryChart history={state.history} />
       </div>
     </>
   );

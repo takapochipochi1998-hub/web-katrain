@@ -6,7 +6,10 @@ import {
   humanProfileFor,
   humanWeaknessFor,
   parseRankBook,
-  rankAfter,
+  nextRating,
+  rankForRating,
+  ratingForRank,
+  ratingOf,
   rankLabel,
   recordResult,
   setRank,
@@ -28,22 +31,35 @@ describe('classifyMove', () => {
 });
 
 describe('rank ladder', () => {
-  it('steps one rank per result and stops at the ends', () => {
-    expect(rankAfter('5k', 'win')).toBe('4k');
-    expect(rankAfter('1k', 'win')).toBe('1d');
-    expect(rankAfter('5k', 'loss')).toBe('6k');
-    expect(rankAfter('5k', 'draw')).toBe('5k');
-    expect(rankAfter('9d', 'win')).toBe('9d');
-    expect(rankAfter('20k', 'loss')).toBe('21k');
-    expect(rankAfter('30k', 'loss')).toBe('30k');
+  it('maps ratings onto ranks, 100 points a rank, clamped at the ends', () => {
+    expect(ratingForRank('30k')).toBe(1000);
+    expect(ratingForRank('10k')).toBe(3000);
+    expect(ratingForRank('1d')).toBe(4000);
+    expect(rankForRating(3049)).toBe('10k');
+    expect(rankForRating(3051)).toBe('9k');
+    expect(rankForRating(-500)).toBe('30k');
+    expect(rankForRating(99999)).toBe('9d');
+  });
+
+  it('moves the rating the Elo way: more for an upset, more while provisional', () => {
+    expect(nextRating(3000, '10k', 'win', 0)).toBe(3020);
+    expect(nextRating(3000, '10k', 'win', 20)).toBe(3012);
+    expect(nextRating(3000, '10k', 'loss', 20)).toBe(2988);
+    expect(nextRating(3000, '10k', 'draw', 20)).toBe(3000);
+    expect(nextRating(3000, '8k', 'win', 20)).toBeGreaterThan(3012);
   });
 
   it('keeps each board size apart and logs the change', () => {
-    let book = setRank(emptyRankBook(), 9, '10k');
-    book = recordResult(book, 9, 'win', 1000);
-    expect(book[9].rank).toBe('9k');
-    expect(book[9].history).toEqual([{ at: 1000, outcome: 'win', before: '10k', after: '9k' }]);
+    let book = setRank(emptyRankBook(), 9, '10k', 1);
+    book = recordResult(book, 9, 'win', 1000, '10k');
+    expect(book[9].rating).toBe(3020);
+    expect(book[9].rank).toBe('10k');
+    expect(book[9].history).toEqual([{ at: 1000, outcome: 'win', before: '10k', after: '10k', ratingBefore: 3000, ratingAfter: 3020, opponent: '10k' }]);
     expect(book[19].rank).toBeNull();
+  });
+
+  it('reads an old rank-only book as the rating of that rank', () => {
+    expect(ratingOf({ rank: '5k', history: [] })).toBe(3500);
   });
 
   it('ignores a result for a board size with no rank set yet', () => {
