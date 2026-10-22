@@ -1,5 +1,5 @@
 import React from 'react';
-import { RANKS, rankForRating, rankLabel, ratingForRank, shiftRank, type Rank, type RankHistoryEntry } from './rankLadder';
+import { displayRating, RANKS, rankLabel, ratingForRank, shiftRank, type Rank, type RankHistoryEntry } from './rankLadder';
 
 /** AI Sensei's strength control: − / slider / + around a rank label. */
 export const RankPicker: React.FC<{ value: Rank; onChange: (rank: Rank) => void; id?: string }> = ({ value, onChange, id }) => (
@@ -33,9 +33,12 @@ export const RankHistoryChart: React.FC<{ history: readonly RankHistoryEntry[] }
   const values = [
     recent[0]!.ratingBefore ?? ratingForRank(recent[0]!.before),
     ...recent.map((h) => h.ratingAfter ?? ratingForRank(h.after)),
-  ];
-  const min = Math.floor(Math.min(...values) / 100) * 100 - 50;
-  const max = Math.ceil(Math.max(...values) / 100) * 100 + 50;
+  ].map(displayRating);
+  const lo = Math.min(...values);
+  const hi = Math.max(...values);
+  const pad = Math.max(15, (hi - lo) * 0.1);
+  const min = lo - pad;
+  const max = hi + pad;
   const W = 320;
   const H = 150;
   const left = 38;
@@ -45,19 +48,18 @@ export const RankHistoryChart: React.FC<{ history: readonly RankHistoryEntry[] }
   const x = (i: number) => left + (i / Math.max(1, values.length - 1)) * (W - left - right);
   const y = (v: number) => top + ((max - v) / (max - min)) * (H - top - bottom);
   const path = values.map((v, i) => `${i ? 'L' : 'M'}${x(i)},${y(v)}`).join('');
-  // A tick at the centre of each rank's band (its exact rating), thinned on a wide range.
-  const ranksSpanned = (max - min) / 100;
-  const tickStep = ranksSpanned <= 7 ? 100 : ranksSpanned <= 14 ? 200 : 400;
-  const ticks: number[] = [];
-  for (let v = Math.ceil(min / 100) * 100; v <= max; v += 100) if ((v / 100) % (tickStep / 100) === 0) ticks.push(v);
+  // A tick at each rank inside the range (ranks sit closer together among kyu), thinned to about five.
+  const inRange = RANKS.filter((r) => { const v = displayRating(ratingForRank(r)); return v >= min && v <= max; });
+  const every = Math.max(1, Math.ceil(inRange.length / 5));
+  const ticks = inRange.filter((_, i) => i % every === 0).map((r) => ({ rank: r, v: displayRating(ratingForRank(r)) }));
   const day = (t: number) => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()}`; };
   return (
     <figure className="sensei-rank-chart">
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`レートの推移: ${values[0]}から${values[values.length - 1]}`}>
-        {ticks.map((v) => (
-          <g key={v}>
+        {ticks.map(({ rank, v }) => (
+          <g key={rank}>
             <line x1={left} y1={y(v)} x2={W - right} y2={y(v)} stroke="var(--s-border)" strokeWidth={1} />
-            <text x={left - 6} y={y(v) + 3.5} fontSize={10} textAnchor="end" fill="var(--s-muted)">{rankLabel(rankForRating(v))}</text>
+            <text x={left - 6} y={y(v) + 3.5} fontSize={10} textAnchor="end" fill="var(--s-muted)">{rankLabel(rank)}</text>
           </g>
         ))}
         <path d={path} fill="none" stroke="var(--s-accent)" strokeWidth={2.2} strokeLinejoin="round" />

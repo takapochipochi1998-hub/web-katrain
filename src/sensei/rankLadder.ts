@@ -1,7 +1,10 @@
 /**
- * Ranked play: one rating per board size, moved by each result the Elo way.
- * The rating maps onto ranks from 30k to 9d, 100 points a rank (30k = 1000,
- * 10k = 3000, 1d = 4000), and the bot is always the rank the rating stands at. KataGo's human SL net knows 20k to
+ * Ranked play: one rating per board size, moved by each result.
+ * The stored rating maps onto ranks from 30k to 9d, 100 points a rank (30k = 1000,
+ * 10k = 3000, 1d = 4000), and the bot is always the rank the rating stands at.
+ * Results follow the EGF's 2021 rating system, in which a rank is a small step
+ * among kyu players and a big one among dans; the number shown to the player
+ * (displayRating) is spaced the same way, with 1 dan at 1000. KataGo's human SL net knows 20k to
  * 9d; below that the bot plays the 20k profile, loosened (see humanWeaknessFor).
  */
 import type { BoardSize } from '../types';
@@ -101,13 +104,36 @@ export const placementLeft = (state: RankState): number => Math.max(0, PLACEMENT
 /** The rating to play at: the player's, or the start for a board size never played. */
 export const playingRating = (state: RankState): number => ratingOf(state) ?? ratingForRank(START_RANK);
 
-/** The rating after one game against a bot of `opponent`'s rank (Elo). */
+// The EGF's scale puts 1d at 2100 where ours has 4000, and its formulas break down
+// near 3300 (pro level), so ratings are clamped below that.
+const EGF_OFFSET = 1900;
+const EGF_CEILING = 3300;
+const egf = (rating: number): number => Math.min(EGF_CEILING - 50, rating - EGF_OFFSET);
+/** EGF 2021: a player's strength, β = −7·ln(3300 − r); the win chance is a Bradley–Terry contest of two β. */
+const egfBeta = (rating: number): number => -7 * Math.log(EGF_CEILING - egf(rating));
+/** EGF 2021's step size: big among weak players, small among strong ones (≈46 at 10k, 18 at 1d, 9 at 5d). */
+const egfCon = (rating: number): number => ((EGF_CEILING - egf(rating)) / 200) ** 1.6;
+
+/** The chance of beating a bot of `opponent`'s rank. */
+export const expectedScore = (rating: number, opponent: Rank): number =>
+  1 / (1 + Math.exp(egfBeta(ratingForRank(opponent)) - egfBeta(rating)));
+
+/** The rating after one game against a bot of `opponent`'s rank. */
 export function nextRating(rating: number, opponent: Rank, outcome: GameOutcome, gamesPlayed: number): number {
-  const expected = 1 / (1 + 10 ** ((ratingForRank(opponent) - rating) / 400));
   const score = outcome === 'win' ? 1 : outcome === 'loss' ? 0 : 0.5;
-  const k = K_BY_GAME[gamesPlayed] ?? K_SETTLED;
-  return Math.round(rating + k * (score - expected));
+  // The early steps find the level; after that the EGF's own step, never below K_SETTLED.
+  const k = Math.max(K_BY_GAME[gamesPlayed] ?? K_SETTLED, egfCon(rating));
+  return Math.round(rating + k * (score - expectedScore(rating, opponent)));
 }
+
+// The shown rating: 30k = 100, 1d = 1000, spaced like β, so a dan is worth far more points than a kyu.
+const SHOWN_1D = 1000;
+const SHOWN_30K = 100;
+const SHOWN_SCALE = (SHOWN_1D - SHOWN_30K) / Math.log((EGF_CEILING - egf(ratingForRank('30k'))) / (EGF_CEILING - egf(ratingForRank('1d'))));
+
+/** The number the player sees for a stored rating (about 565 at 10k, 1290 at 5d, 1790 at 9d). */
+export const displayRating = (rating: number): number =>
+  Math.round(SHOWN_1D + SHOWN_SCALE * Math.log((EGF_CEILING - egf(ratingForRank('1d'))) / (EGF_CEILING - egf(rating))));
 
 export function recordResult(book: RankBook, size: RankedBoardSize, outcome: GameOutcome, at: number, opponent?: Rank): RankBook {
   const state = book[size];

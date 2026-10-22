@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { classifyMove } from '../src/sensei/moveQuality';
 import { outcomeFor, parseResult, resultFromScoreLead, resultLabel } from '../src/sensei/gameResult';
 import {
+  displayRating,
   emptyRankBook,
+  expectedScore,
   humanProfileFor,
   humanWeaknessFor,
   parseRankBook,
@@ -43,13 +45,34 @@ describe('rank ladder', () => {
     expect(rankForRating(99999)).toBe('9d');
   });
 
-  it('moves the rating the Elo way: more for an upset, far more in the first games', () => {
+  it('moves the rating the EGF way: more for an upset, far more in the first games, less among dans', () => {
     expect(nextRating(3000, '10k', 'win', 0)).toBe(3400);
     expect(nextRating(3000, '10k', 'loss', 1)).toBe(2700);
-    expect(nextRating(3000, '10k', 'win', 20)).toBe(3012);
-    expect(nextRating(3000, '10k', 'loss', 20)).toBe(2988);
+    expect(nextRating(3000, '10k', 'win', 20)).toBe(3023);
+    expect(nextRating(3000, '10k', 'loss', 20)).toBe(2977);
     expect(nextRating(3000, '10k', 'draw', 20)).toBe(3000);
-    expect(nextRating(3000, '8k', 'win', 20)).toBeGreaterThan(3012);
+    expect(nextRating(3000, '8k', 'win', 20)).toBeGreaterThan(3023);
+    expect(nextRating(4400, '5d', 'win', 20) - 4400).toBeLessThan(nextRating(3000, '10k', 'win', 20) - 3000);
+  });
+
+  it('makes a rank a bigger gap among dans than among kyu players', () => {
+    const edge = (rank: Parameters<typeof ratingForRank>[0], stronger: Parameters<typeof ratingForRank>[0]) =>
+      1 - expectedScore(ratingForRank(rank), stronger);
+    expect(edge('20k', '19k')).toBeCloseTo(0.56, 2);
+    expect(edge('1d', '2d')).toBeCloseTo(0.65, 2);
+    expect(edge('5d', '6d')).toBeGreaterThan(0.7);
+    expect(expectedScore(3000, '10k')).toBeCloseTo(0.5, 5);
+  });
+
+  it('shows 1 dan as 1000, with dans spaced wider than kyu', () => {
+    expect(displayRating(ratingForRank('30k'))).toBe(100);
+    expect(displayRating(ratingForRank('10k'))).toBe(565);
+    expect(displayRating(ratingForRank('1d'))).toBe(1000);
+    expect(displayRating(ratingForRank('9d'))).toBe(1789);
+    const span = (a: Parameters<typeof ratingForRank>[0], b: Parameters<typeof ratingForRank>[0]) =>
+      displayRating(ratingForRank(b)) - displayRating(ratingForRank(a));
+    expect(span('1d', '9d')).toBeGreaterThan(span('30k', '10k'));
+    expect(displayRating(99999)).toBeGreaterThan(1789);
   });
 
   it('keeps each board size apart and logs the change', () => {

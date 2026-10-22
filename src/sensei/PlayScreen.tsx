@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { BoardSize } from '../types';
 import { RankHistoryChart, RankPicker } from './RankPicker';
-import { PLACEMENT_GAMES, placementLeft, playingRating, rankForRating, rankLabel, type Rank, type RankBook, type RankedBoardSize } from './rankLadder';
+import { displayRating, PLACEMENT_GAMES, placementLeft, playingRating, rankForRating, rankLabel, type Rank, type RankBook, type RankedBoardSize } from './rankLadder';
 import type { GameConfig, SessionMeta } from './session';
 import { Header, Segmented } from './ui';
 
@@ -102,7 +102,7 @@ const RankedPanel: React.FC<Pick<Props, 'ranks' | 'onStart'> & { size: RankedBoa
               </>
             ) : (
               <>
-                <div className="sensei-big tabular-nums">{rating}</div>
+                <div className="sensei-big tabular-nums">{displayRating(rating)}</div>
                 <div className="sensei-rank-equiv">{rankLabel(rank)}</div>
               </>
             )}

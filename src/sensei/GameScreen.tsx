@@ -3,7 +3,7 @@ import { useGameStore } from '../store/gameStore';
 import type { GameNode, Player } from '../types';
 import { SenseiBoard } from './SenseiBoard';
 import { outcomeFor, parseResult, resultFromScoreLead, resultLabel } from './gameResult';
-import { PLACEMENT_GAMES, placementLeft, rankForRating, rankLabel, ratingOf, recordResult, type RankBook, type RankedBoardSize } from './rankLadder';
+import { displayRating, PLACEMENT_GAMES, placementLeft, rankForRating, rankLabel, ratingOf, recordResult, type RankBook, type RankedBoardSize } from './rankLadder';
 import { loseOnTime, saveSession, type SessionMeta } from './session';
 import { formatClock, hasClock, spendTime, viewClock } from './clock';
 import { Dialog } from './ui';
@@ -197,9 +197,9 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
   const ratingChange = placingRating
     ? `判定中：あと${left}局でレートが決まります`
     : revealed && change.ratingAfter !== undefined
-      ? `レートが決まりました：${change.ratingAfter}`
+      ? `レートが決まりました：${displayRating(change.ratingAfter)}`
       : change && change.ratingBefore !== undefined && change.ratingAfter !== undefined
-        ? `レート ${change.ratingBefore} → ${change.ratingAfter}（${change.ratingAfter >= change.ratingBefore ? '+' : '−'}${Math.abs(change.ratingAfter - change.ratingBefore)}）`
+        ? ratingLine(displayRating(change.ratingBefore), displayRating(change.ratingAfter))
         : null;
   const rankChange = placingRating
     ? null
@@ -231,7 +231,7 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
     const captures = color === 'black' ? capturedWhite : capturedBlack;
     const level = who === 'ai'
       ? placing ? 'ランク戦（判定中）' : rankLabel(meta.aiRank)
-      : placing ? `判定中 · あと${left}局` : rating !== null ? `レート ${rating} · ${rankLabel(rankForRating(rating))}` : '練習対局';
+      : placing ? `判定中 · あと${left}局` : rating !== null ? `レート ${displayRating(rating)} · ${rankLabel(rankForRating(rating))}` : '練習対局';
     return (
       <div className={`sensei-player${!ended && currentPlayer === color ? ' is-turn' : ''}${who === 'me' && clock?.byo ? ' is-byoyomi' : ''}`}>
         <span className={`sensei-stone sensei-stone-${color}`} aria-hidden />
@@ -337,3 +337,7 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
 };
 
 const outcomeLabel = (color: Player) => (color === 'black' ? '黒' : '白');
+
+/** "レート 565 → 580（+15）". */
+const ratingLine = (before: number, after: number): string =>
+  `レート ${before} → ${after}（${after >= before ? '+' : '−'}${Math.abs(after - before)}）`;
