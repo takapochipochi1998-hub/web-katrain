@@ -3,7 +3,7 @@ import { useGameStore } from '../store/gameStore';
 import type { GameNode, Player } from '../types';
 import { SenseiBoard } from './SenseiBoard';
 import { outcomeFor, parseResult, resultFromScoreLead, resultLabel } from './gameResult';
-import { rankForRating, rankLabel, ratingOf, recordResult, type RankBook, type RankedBoardSize } from './rankLadder';
+import { PLACEMENT_GAMES, placementLeft, rankForRating, rankLabel, ratingOf, recordResult, type RankBook, type RankedBoardSize } from './rankLadder';
 import { loseOnTime, saveSession, type SessionMeta } from './session';
 import { formatClock, hasClock, spendTime, viewClock } from './clock';
 import { Dialog } from './ui';
@@ -189,15 +189,27 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
   const outcome = outcomeFor(endState, meta.humanColor);
   const dialogOpen = ended && dismissedNodeId !== currentNode.id;
   const change = meta.kind === 'ranked' ? ranks[size].history.find((h) => h.at >= meta.startedAt) : undefined;
+  // While placing, only how many games are left; the game that ends placement reveals the rating.
+  const left = meta.kind === 'ranked' ? placementLeft(ranks[size]) : 0;
+  const revealed = !!change && left === 0 && ranks[size].history.indexOf(change) === PLACEMENT_GAMES - 1;
+  const placingRating = left > 0 && !!change;
   // "レート 3000 → 3020（+20）", and a line when the equivalent rank moved.
-  const ratingChange = change && change.ratingBefore !== undefined && change.ratingAfter !== undefined
-    ? `レート ${change.ratingBefore} → ${change.ratingAfter}（${change.ratingAfter >= change.ratingBefore ? '+' : '−'}${Math.abs(change.ratingAfter - change.ratingBefore)}）`
-    : null;
-  const rankChange = change && change.before !== change.after
-    ? change.outcome === 'win'
-      ? `おめでとうございます！ ${rankLabel(change.after)}になりました`
-      : `${rankLabel(change.after)}になりました`
-    : null;
+  const ratingChange = placingRating
+    ? `判定中：あと${left}局でレートが決まります`
+    : revealed && change.ratingAfter !== undefined
+      ? `レートが決まりました：${change.ratingAfter}`
+      : change && change.ratingBefore !== undefined && change.ratingAfter !== undefined
+        ? `レート ${change.ratingBefore} → ${change.ratingAfter}（${change.ratingAfter >= change.ratingBefore ? '+' : '−'}${Math.abs(change.ratingAfter - change.ratingBefore)}）`
+        : null;
+  const rankChange = placingRating
+    ? null
+    : revealed
+      ? `あなたは${rankLabel(change.after)}です`
+      : change && change.before !== change.after
+        ? change.outcome === 'win'
+          ? `おめでとうございます！ ${rankLabel(change.after)}になりました`
+          : `${rankLabel(change.after)}になりました`
+        : null;
   // The clock is the chip's main figure; byo-yomi tints the chip so it shows at a glance.
   const flagged = parseResult(endState)?.margin === 'time';
   const clock = hasClock(tc) && clockView
@@ -209,6 +221,8 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
     : null;
   const clockUrgent = !!clock && clockRunning && !!clockView && (clockView.inByoyomi ? clockView.secondsLeft <= 10 : clockView.secondsLeft <= 30);
   const rating = meta.kind === 'ranked' ? ratingOf(ranks[size]) : null;
+  // During placement the cards hide the rating, and the bot's rank that would give it away.
+  const placing = meta.kind === 'ranked' && (change ? ranks[size].history.indexOf(change) < PLACEMENT_GAMES - 1 : left > 0);
   const aiThinking = !ended && (isAiThinking || currentPlayer === aiColor) && !counting;
 
   // Like 囲碁シル: the opponent above the board, the player below it, each with their own facts.
@@ -216,8 +230,8 @@ export const GameScreen: React.FC<Props> = ({ meta, ranks, confirmMoves, onRanks
     const color = who === 'me' ? meta.humanColor : aiColor;
     const captures = color === 'black' ? capturedWhite : capturedBlack;
     const level = who === 'ai'
-      ? rankLabel(meta.aiRank)
-      : rating !== null ? `レート ${rating} · ${rankLabel(rankForRating(rating))}` : '練習対局';
+      ? placing ? 'ランク戦（判定中）' : rankLabel(meta.aiRank)
+      : placing ? `判定中 · あと${left}局` : rating !== null ? `レート ${rating} · ${rankLabel(rankForRating(rating))}` : '練習対局';
     return (
       <div className={`sensei-player${!ended && currentPlayer === color ? ' is-turn' : ''}${who === 'me' && clock?.byo ? ' is-byoyomi' : ''}`}>
         <span className={`sensei-stone sensei-stone-${color}`} aria-hidden />

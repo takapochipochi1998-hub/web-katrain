@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { BoardSize } from '../types';
 import { RankHistoryChart, RankPicker } from './RankPicker';
-import { playingRating, rankForRating, rankLabel, type Rank, type RankBook, type RankedBoardSize } from './rankLadder';
+import { PLACEMENT_GAMES, placementLeft, playingRating, rankForRating, rankLabel, type Rank, type RankBook, type RankedBoardSize } from './rankLadder';
 import type { GameConfig, SessionMeta } from './session';
 import { Header, Segmented } from './ui';
 
@@ -44,7 +44,9 @@ export const PlayScreen: React.FC<Props> = ({ ranks, onStart, ongoing, onResume,
             <span className="sensei-list-main">
               <span className="sensei-list-title">対局を続ける</span>
               <span className="sensei-muted block">
-                {ongoing.size}路 · AI {rankLabel(ongoing.aiRank)} · {ongoing.kind === 'ranked' ? 'ランク戦' : '練習対局'}
+                {ongoing.size}路 · {ongoing.kind === 'ranked'
+                  ? placementLeft(ranks[ongoing.size as RankedBoardSize] ?? ranks[19]) > 0 ? 'ランク戦（判定中）' : `AI ${rankLabel(ongoing.aiRank)} · ランク戦`
+                  : `AI ${rankLabel(ongoing.aiRank)} · 練習対局`}
               </span>
             </span>
             <span aria-hidden>›</span>
@@ -84,6 +86,7 @@ const RankedPanel: React.FC<Pick<Props, 'ranks' | 'onStart'> & { size: RankedBoa
   // Never played at this size: start at 10 kyu; the first games find the level fast.
   const rating = playingRating(state);
   const rank = rankForRating(rating);
+  const left = placementLeft(state);
   const wins = state.history.filter((h) => h.outcome === 'win').length;
   const losses = state.history.filter((h) => h.outcome === 'loss').length;
   return (
@@ -92,8 +95,17 @@ const RankedPanel: React.FC<Pick<Props, 'ranks' | 'onStart'> & { size: RankedBoa
         <div className="flex items-end justify-between">
           <div>
             <div className="sensei-muted">{size}路のレート</div>
-            <div className="sensei-big tabular-nums">{rating}</div>
-            <div className="sensei-rank-equiv">{rankLabel(rank)}</div>
+            {left > 0 ? (
+              <>
+                <div className="sensei-big">判定中</div>
+                <div className="sensei-rank-equiv">{PLACEMENT_GAMES - left}/{PLACEMENT_GAMES}局 · あと{left}局でレートが決まります</div>
+              </>
+            ) : (
+              <>
+                <div className="sensei-big tabular-nums">{rating}</div>
+                <div className="sensei-rank-equiv">{rankLabel(rank)}</div>
+              </>
+            )}
           </div>
           <div className="sensei-muted text-right">{wins}勝 {losses}敗</div>
         </div>
@@ -105,7 +117,7 @@ const RankedPanel: React.FC<Pick<Props, 'ranks' | 'onStart'> & { size: RankedBoa
           対局する
         </button>
       </div>
-      {state.history.length > 0 && (
+      {left === 0 && state.history.length > 0 && (
         <div className="sensei-card">
           <h2>レートの推移</h2>
           <RankHistoryChart history={state.history} />

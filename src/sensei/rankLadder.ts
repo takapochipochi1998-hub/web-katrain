@@ -86,6 +86,18 @@ export function rankForRating(rating: number): Rank {
 export const ratingOf = (state: RankState): number | null =>
   state.rating ?? (state.rank ? ratingForRank(state.rank) : null);
 
+/**
+ * Placement, the way Valorant does it: the first games at a board size show no
+ * rating, then it is revealed. The big early steps above do the searching.
+ */
+export const PLACEMENT_GAMES = 5;
+
+/** Ranked games played at a size; the larger count, as a hand-set rank once reset `games`. */
+export const gamesPlayed = (state: RankState): number => Math.max(state.games ?? 0, state.history.length);
+
+/** Placement games still to play before the rating is shown (0 once placed). */
+export const placementLeft = (state: RankState): number => Math.max(0, PLACEMENT_GAMES - gamesPlayed(state));
+
 /** The rating to play at: the player's, or the start for a board size never played. */
 export const playingRating = (state: RankState): number => ratingOf(state) ?? ratingForRank(START_RANK);
 

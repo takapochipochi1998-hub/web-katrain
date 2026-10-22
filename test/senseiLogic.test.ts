@@ -6,6 +6,8 @@ import {
   humanProfileFor,
   humanWeaknessFor,
   parseRankBook,
+  PLACEMENT_GAMES,
+  placementLeft,
   nextRating,
   rankForRating,
   ratingForRank,
@@ -112,5 +114,20 @@ describe('game results', () => {
     expect(resultFromScoreLead(3.2)).toBe('B+3.5');
     expect(resultFromScoreLead(-0.1)).toBe('W+0.5');
     expect(resultFromScoreLead(-7.9)).toBe('W+7.5');
+  });
+});
+
+describe('placement', () => {
+  it('hides the rating for the first five games at a size, then reveals it', () => {
+    let book = emptyRankBook();
+    expect(placementLeft(book[9])).toBe(PLACEMENT_GAMES);
+    for (let i = 0; i < PLACEMENT_GAMES; i++) book = recordResult(book, 9, 'win', i + 1);
+    expect(placementLeft(book[9])).toBe(0);
+    expect(placementLeft(book[13])).toBe(PLACEMENT_GAMES);
+  });
+
+  it('counts games from the history when a hand-set rank reset the counter', () => {
+    const history = Array.from({ length: 6 }, (_, i) => ({ at: i, outcome: 'win' as const, before: '10k' as const, after: '10k' as const }));
+    expect(placementLeft({ rank: '10k', games: 0, history })).toBe(0);
   });
 });
